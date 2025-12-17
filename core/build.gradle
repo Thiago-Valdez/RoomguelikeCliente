@@ -1,0 +1,25 @@
+// core/build.gradle
+
+plugins {
+  id 'java-library'
+}
+
+eclipse.project.name = appName + '-core'
+
+// encoding
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+dependencies {
+  // Librerías que el resto del juego puede usar (API pública)
+  api "com.badlogicgames.ashley:ashley:$ashleyVersion"
+  api "com.badlogicgames.gdx-controllers:gdx-controllers-core:$gdxControllersVersion"
+  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx:$gdxVersion"
+
+  // Si necesitás algo solo interno al core, usás implementation.
+
+  if (enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
+  }
+}
