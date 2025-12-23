@@ -13,33 +13,38 @@ import entidades.personajes.Jugador;
 
 public class RedPartidaCliente implements GameController {
 
+    private static final String TAG = "NET";
+    private static final boolean TELEPORT_ALWAYS_ONLINE = true; // (lo dejé por compat aunque hoy no lo uses)
+
     private ClientThread client;
 
+    // ===== Estado online =====
     private boolean modoOnline = false;
     private boolean onlineArrancado = false;
     private int miPlayerId = -1;
 
+    // ===== Start/seed/nivel =====
     private volatile boolean startRecibido = false;
     private volatile long seedServidor = 0L;
     private volatile int nivelServidor = 1;
     private volatile boolean mundoListo = false;
 
-    // sala
+    // ===== Sala pendiente =====
     private volatile String salaPendiente = null;
 
-    // estado red
+    // ===== Disconnect =====
     private volatile String motivoDisconnect = null;
 
-    // updates
+    // ===== Updates =====
     private final Map<Integer, Vector2> posicionesPendientes = new HashMap<>();
 
-    // “ventanas” para evitar glitches al cambiar de sala
-    private volatile int ignorarPosFrames = 0;
+    // ===== Ventanas anti-glitch =====
+    private volatile int ignorarPosFrames = 0; // (lo dejé, aunque hoy no lo uses)
     private volatile int teleportFrames = 0;
 
-    // Si tu server es autoritativo con Box2D, lo más correcto es aplicar posiciones con teleport,
-    // y NO intentar “seguir” con setLinearVelocity en el cliente (eso genera deslizamiento/enganche).
-    private static final boolean TELEPORT_ALWAYS_ONLINE = true;
+    // =====================
+    // Config / lifecycle
+    // =====================
 
     public void setClient(ClientThread client) {
         this.client = client;
@@ -70,6 +75,7 @@ public class RedPartidaCliente implements GameController {
         synchronized (posicionesPendientes) {
             posicionesPendientes.clear();
         }
+
         salaPendiente = null;
         motivoDisconnect = null;
 
@@ -77,9 +83,16 @@ public class RedPartidaCliente implements GameController {
         teleportFrames = 0;
     }
 
+    // =====================
+    // Getters / consume
+    // =====================
+
     public boolean isModoOnline() {
         return modoOnline;
     }
+
+    public long getSeedServidor() { return seedServidor; }
+    public int getNivelServidor() { return nivelServidor; }
 
     public boolean consumirStartRecibido() {
         if (!startRecibido) return false;
@@ -87,8 +100,17 @@ public class RedPartidaCliente implements GameController {
         return true;
     }
 
-    public long getSeedServidor() { return seedServidor; }
-    public int getNivelServidor() { return nivelServidor; }
+    /** Devuelve el cambio de sala pendiente (si lo hay) y lo limpia. */
+    public String consumirCambioSala() {
+        if (salaPendiente == null) return null;
+        String s = salaPendiente;
+        salaPendiente = null;
+        return s;
+    }
+
+    // =====================
+    // Envíos al server
+    // =====================
 
     public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicitado) {
         if (!modoOnline || !onlineArrancado || client == null) return;
@@ -112,29 +134,19 @@ public class RedPartidaCliente implements GameController {
         if (miPlayerId > 0) msg = "Door:" + miPlayerId + ":" + origen + ":" + destino + ":" + dir;
         else msg = "Door:" + origen + ":" + destino + ":" + dir;
 
-        Gdx.app.log("NET", ">> " + msg);
+        Gdx.app.log(TAG, ">> " + msg);
         client.sendMessage(msg);
     }
 
-    /** Devuelve el cambio de sala pendiente (si lo hay) y lo limpia. */
-    public String consumirCambioSala() {
-        if (salaPendiente == null) return null;
-        String s = salaPendiente;
-        salaPendiente = null;
-        return s;
-    }
+    // =====================
+    // Aplicación de updates
+    // =====================
 
-    /**
-     * Aplica los UpdatePosition recibidos del server.
-     * Regla: en ONLINE el server es la autoridad.
-     * - Evitamos “follow” con setLinearVelocity porque genera deslizamiento/enganche.
-     * - Aplicamos setTransform + vel=0 (teleport) para representar el estado autoritativo.
-     */
     public void aplicarUpdatesPendientes(Jugador jugador1, Jugador jugador2) {
         if (!modoOnline || !mundoListo) return;
 
         if (motivoDisconnect != null) {
-            Gdx.app.log("NET", "Disconnect reason: " + motivoDisconnect);
+            Gdx.app.log(TAG, "Disconnect reason: " + motivoDisconnect);
             motivoDisconnect = null;
         }
 
@@ -148,6 +160,7 @@ public class RedPartidaCliente implements GameController {
         boolean usarTeleport = teleportFrames > 0;
         if (usarTeleport) teleportFrames--;
 
+        // (misma lógica: setTransform + vel=0)
         for (Map.Entry<Integer, Vector2> e : snapshot.entrySet()) {
             int id = e.getKey();
             Vector2 p = e.getValue();
@@ -158,15 +171,18 @@ public class RedPartidaCliente implements GameController {
             Body b = j.getCuerpoFisico();
             if (b == null) continue;
 
-            // ✅ Posición autoritativa
             b.setTransform(p.x, p.y, b.getAngle());
-
-            // ✅ Cortar cualquier “inercia” local
             b.setLinearVelocity(0f, 0f);
             b.setAwake(true);
         }
     }
 
+    public void onCambioSalaAplicado() {
+        synchronized (posicionesPendientes) {
+            posicionesPendientes.clear();
+        }
+        teleportFrames = 2;
+    }
 
     // =====================
     // GameController callbacks desde ClientThread
@@ -176,7 +192,7 @@ public class RedPartidaCliente implements GameController {
     public void connect(int playerId) {
         this.miPlayerId = playerId;
         this.modoOnline = true;
-        Gdx.app.log("NET", "Connected. miPlayerId=" + miPlayerId);
+        Gdx.app.log(TAG, "Connected. miPlayerId=" + miPlayerId);
     }
 
     @Override
@@ -198,7 +214,7 @@ public class RedPartidaCliente implements GameController {
         ignorarPosFrames = 0;
         teleportFrames = 2;
 
-        Gdx.app.log("NET", "Start recibido seed=" + seed + " nivel=" + nivel);
+        Gdx.app.log(TAG, "Start recibido seed=" + seed + " nivel=" + nivel);
     }
 
     @Override
@@ -208,22 +224,9 @@ public class RedPartidaCliente implements GameController {
         }
     }
 
-    public void onCambioSalaAplicado() {
-        // Si todavía querés esta “ventana”, dejala corta para no congelar el sync.
-
-        synchronized (posicionesPendientes) {
-            posicionesPendientes.clear();
-        }
-
-        // La clave: los primeros updates de posición post-UpdateRoom deben teletransportar
-        teleportFrames = 2;
-    }
-
     @Override
     public void updateRoom(String habitacionId) {
         salaPendiente = habitacionId;
-
-        // ✅ Durante 2 frames, aplicar UpdatePosition como TELEPORT (sin smoothing)
         teleportFrames = 2;
     }
 
