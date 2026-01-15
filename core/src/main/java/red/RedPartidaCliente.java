@@ -1,11 +1,12 @@
 package red;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
-import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.Body;
 
 import control.input.ControlJugador;
@@ -35,8 +36,24 @@ public class RedPartidaCliente implements GameController {
     // ===== Disconnect =====
     private volatile String motivoDisconnect = null;
 
-    // ===== Updates =====
-    private final Map<Integer, Vector2> posicionesPendientes = new HashMap<>();
+    // ===== Snapshots para interpolación (cliente visual) =====
+    private static final int MAX_SAMPLES_PER_PLAYER = 10;
+    private static final long INTERP_DELAY_MS = 100; // delay visual para interpolar (buffer)
+
+    private static final class Sample {
+        final float x;
+        final float y;
+        final long tMs;
+
+        Sample(float x, float y, long tMs) {
+            this.x = x;
+            this.y = y;
+            this.tMs = tMs;
+        }
+    }
+
+    // playerId -> cola de samples (ordenados por llegada)
+    private final Map<Integer, Deque<Sample>> samplesPorJugador = new HashMap<>();
 
     // ===== Ventanas anti-glitch =====
     private volatile int ignorarPosFrames = 0; // (lo dejé, aunque hoy no lo uses)
@@ -72,8 +89,8 @@ public class RedPartidaCliente implements GameController {
         seedServidor = 0L;
         nivelServidor = 1;
 
-        synchronized (posicionesPendientes) {
-            posicionesPendientes.clear();
+        synchronized (samplesPorJugador) {
+            samplesPorJugador.clear();
         }
 
         salaPendiente = null;
@@ -150,36 +167,94 @@ public class RedPartidaCliente implements GameController {
             motivoDisconnect = null;
         }
 
-        Map<Integer, Vector2> snapshot;
-        synchronized (posicionesPendientes) {
-            if (posicionesPendientes.isEmpty()) return;
-            snapshot = new HashMap<>(posicionesPendientes);
-            posicionesPendientes.clear();
+        final long nowMs = System.currentTimeMillis();
+        final long renderTimeMs = nowMs - INTERP_DELAY_MS;
+
+        // Si venimos de un cambio de sala, preferimos "snap" a la última muestra
+        final boolean snap = (teleportFrames > 0);
+        if (snap) teleportFrames--;
+
+        // Aplicamos interpolación SOLO visual: movemos los cuerpos al punto interpolado
+        // (en online, el cliente no debería depender de la física local para gameplay).
+        aplicarInterpoladoParaJugador(1, jugador1, renderTimeMs, snap);
+        aplicarInterpoladoParaJugador(2, jugador2, renderTimeMs, snap);
+    }
+
+    private void aplicarInterpoladoParaJugador(int id, Jugador jugador, long renderTimeMs, boolean snap) {
+        if (jugador == null) return;
+        Body b = jugador.getCuerpoFisico();
+        if (b == null) return;
+
+        Sample a = null;
+        Sample c = null;
+
+        synchronized (samplesPorJugador) {
+            Deque<Sample> q = samplesPorJugador.get(id);
+            if (q == null || q.isEmpty()) return;
+
+            // En modo "snap" tomamos la última muestra y limpiamos el resto.
+            if (snap) {
+                Sample last = q.peekLast();
+                q.clear();
+                q.addLast(last);
+                a = last;
+            } else {
+                // Descarta muestras demasiado viejas (para mantener cola chica y evitar interpolar con basura)
+                while (q.size() > 2 && q.peekFirst().tMs < renderTimeMs - 1000) {
+                    q.pollFirst();
+                }
+
+                // Queremos dos muestras que enmarquen renderTimeMs.
+                // Como llegan ordenadas por tiempo de llegada, recorremos desde el inicio.
+                Sample prev = null;
+                for (Sample s : q) {
+                    if (s.tMs <= renderTimeMs) prev = s;
+                    if (s.tMs >= renderTimeMs) {
+                        c = s;
+                        break;
+                    }
+                }
+
+                if (prev == null) {
+                    // Todavía no tenemos una muestra <= renderTime, usamos la primera disponible
+                    a = q.peekFirst();
+                } else {
+                    a = prev;
+                }
+
+                if (c == null) {
+                    // No hay muestra futura, usamos la última (extrapolación cero)
+                    c = q.peekLast();
+                }
+            }
         }
 
-        boolean usarTeleport = teleportFrames > 0;
-        if (usarTeleport) teleportFrames--;
+        // Si solo tenemos una muestra útil
+        if (a == null || c == null) return;
 
-        // (misma lógica: setTransform + vel=0)
-        for (Map.Entry<Integer, Vector2> e : snapshot.entrySet()) {
-            int id = e.getKey();
-            Vector2 p = e.getValue();
+        float x;
+        float y;
 
-            Jugador j = (id == 1) ? jugador1 : (id == 2 ? jugador2 : null);
-            if (j == null) continue;
-
-            Body b = j.getCuerpoFisico();
-            if (b == null) continue;
-
-            b.setTransform(p.x, p.y, b.getAngle());
-            b.setLinearVelocity(0f, 0f);
-            b.setAwake(true);
+        if (snap || a == c || a.tMs == c.tMs) {
+            x = c.x;
+            y = c.y;
+        } else {
+            float alpha = (float) (renderTimeMs - a.tMs) / (float) (c.tMs - a.tMs);
+            if (alpha < 0f) alpha = 0f;
+            if (alpha > 1f) alpha = 1f;
+            x = a.x + (c.x - a.x) * alpha;
+            y = a.y + (c.y - a.y) * alpha;
         }
+
+        b.setTransform(x, y, b.getAngle());
+        b.setLinearVelocity(0f, 0f);
+        b.setAwake(true);
     }
 
     public void onCambioSalaAplicado() {
-        synchronized (posicionesPendientes) {
-            posicionesPendientes.clear();
+        // Limpiamos buffer para no interpolar entre salas distintas
+        synchronized (samplesPorJugador) {
+            samplesPorJugador.clear();
         }
         teleportFrames = 2;
     }
@@ -200,8 +275,8 @@ public class RedPartidaCliente implements GameController {
         this.seedServidor = seed;
         this.nivelServidor = nivel;
 
-        synchronized (posicionesPendientes) {
-            posicionesPendientes.clear();
+        synchronized (samplesPorJugador) {
+            samplesPorJugador.clear();
         }
         salaPendiente = null;
 
@@ -219,8 +294,16 @@ public class RedPartidaCliente implements GameController {
 
     @Override
     public void updatePlayerPosition(int playerId, float x, float y) {
-        synchronized (posicionesPendientes) {
-            posicionesPendientes.put(playerId, new Vector2(x, y));
+        final long nowMs = System.currentTimeMillis();
+        synchronized (samplesPorJugador) {
+            Deque<Sample> q = samplesPorJugador.computeIfAbsent(playerId, k -> new ArrayDeque<>());
+            // Asegura orden no-decreciente por si el reloj cambiara levemente
+            if (!q.isEmpty() && nowMs < q.peekLast().tMs) {
+                q.addLast(new Sample(x, y, q.peekLast().tMs));
+            } else {
+                q.addLast(new Sample(x, y, nowMs));
+            }
+            while (q.size() > MAX_SAMPLES_PER_PLAYER) q.pollFirst();
         }
     }
 

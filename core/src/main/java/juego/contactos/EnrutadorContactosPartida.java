@@ -34,10 +34,14 @@ public final class EnrutadorContactosPartida implements ContactListener {
     public void beginContact(Contact contact) {
         Fixture a = contact.getFixtureA();
         Fixture b = contact.getFixtureB();
-
-        // Puertas (robusto: puerta puede venir en A o B)
-        encolarContactoPuerta(a, b);
-        encolarContactoPuerta(b, a);
+        // ✅ ONLINE: las puertas las decide el SERVER (no encolamos EventoPuerta en cliente)
+        if (partida.getRedController() != null && partida.getRedController().isModoOnline()) {
+            // igual dejamos pickups/botones/daño para migrarlos después
+        } else {
+            // Puertas (robusto: puerta puede venir en A o B)
+            encolarContactoPuerta(a, b);
+            encolarContactoPuerta(b, a);
+        }
 
         // Pickups
         encolarPickup(a, b);

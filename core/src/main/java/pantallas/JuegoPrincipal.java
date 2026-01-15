@@ -42,7 +42,7 @@ public class JuegoPrincipal implements Screen {
             RedPartidaCliente redController = partida.getRedController();
             System.out.println("[JP] redController = " + redController);
 
-            ClientThread client = new ClientThread(redController);
+            this.client = new ClientThread(redController);
             System.out.println("[JP] ClientThread INSTANCIADO = " + client);
 
             partida.setClient(client);
