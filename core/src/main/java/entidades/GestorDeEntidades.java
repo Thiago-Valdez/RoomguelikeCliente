@@ -27,6 +27,12 @@ public class GestorDeEntidades {
     private final List<Item> itemsMundo = new ArrayList<>();
     private final Map<Item, Body> cuerposItems = new HashMap<>();
 
+    // ✅ ONLINE: ids estables para items sincronizados por red (SpawnItem/DespawnItem)
+    private final Map<Integer, Item> itemPorIdOnline = new HashMap<>();
+
+    // ✅ ONLINE: ids estables para enemigos sincronizados por red (SpawnEnemy/UpdateEnemy/DespawnEnemy)
+    private final Map<Integer, Enemigo> enemigoPorIdOnline = new HashMap<>();
+
     // Para no respawnear infinitamente ítems de BOTIN
     private final Set<Habitacion> botinesConItem = new HashSet<>();
 
@@ -288,9 +294,107 @@ public class GestorDeEntidades {
         jugador.agregarObjeto(item);
         jugador.reaplicarEfectosDeItems(); // ✅ esto es clave para stats (velocidad, vidaMax, etc.)
 
+        removerItemDelMundo(item);
+    }
+
+    /**
+     * Remueve un item del mundo sin aplicar efectos a ningún jugador.
+     * Útil para ONLINE autoritativo.
+     */
+    public void removerItemDelMundo(Item item) {
+        if (item == null) return;
         Body body = cuerposItems.remove(item);
         if (body != null) world.destroyBody(body);
         itemsMundo.remove(item);
+    }
+
+    // =====================
+    // ONLINE (server-driven)
+    // =====================
+
+    /** Spawnea un item que viene por red. No aplica efectos, solo existe para render / HUD. */
+    public void spawnItemOnline(int itemId, ItemTipo tipo, float px, float py) {
+        if (itemId <= 0 || tipo == null) return;
+        if (itemPorIdOnline.containsKey(itemId)) return;
+
+        // Creamos un Item “real” para reutilizar el render existente (sprites por tipo, etc.).
+        // IMPORTANTE: en online NO vamos a aplicar sus efectos desde el cliente.
+        Item item = tipo.crearInstancia();
+
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.StaticBody;
+        bd.position.set(px, py);
+        Body body = world.createBody(bd);
+
+        CircleShape shape = new CircleShape();
+        shape.setRadius(12f);
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.isSensor = true;
+        Fixture fx = body.createFixture(fd);
+        shape.dispose();
+
+        fx.setUserData(item);
+
+        itemsMundo.add(item);
+        cuerposItems.put(item, body);
+        itemPorIdOnline.put(itemId, item);
+    }
+
+    public void despawnItemOnline(int itemId) {
+        Item item = itemPorIdOnline.remove(itemId);
+        if (item == null) return;
+        removerItemDelMundo(item);
+    }
+
+    // =====================
+    // ONLINE: Enemigos (server-driven)
+    // =====================
+
+    /** Spawnea un enemigo que viene por red. En online NO corre IA local: solo existe para render. */
+    public void spawnEnemyOnline(int enemyId, String nombre, Habitacion sala, float px, float py) {
+        if (enemyId <= 0) return;
+        if (enemigoPorIdOnline.containsKey(enemyId)) return;
+
+        BodyDef bd = new BodyDef();
+        bd.type = BodyDef.BodyType.KinematicBody; // lo movemos a mano por snapshots
+        bd.position.set(px, py);
+        bd.fixedRotation = true;
+        Body body = world.createBody(bd);
+
+        CircleShape shape = new CircleShape();
+        shape.setRadius(12f);
+
+        FixtureDef fd = new FixtureDef();
+        fd.shape = shape;
+        fd.isSensor = true;
+        Fixture fx = body.createFixture(fd);
+        shape.dispose();
+
+        fx.setUserData("enemigo");
+
+        Enemigo e = new Enemigo((nombre != null && !nombre.isEmpty()) ? nombre : ("Enemigo" + enemyId), 0f, body, 0);
+        body.setUserData(e);
+
+        registrarEnemigo(sala, e);
+        enemigoPorIdOnline.put(enemyId, e);
+    }
+
+    /** Actualiza posición de enemigo por red. */
+    public void updateEnemyOnline(int enemyId, float px, float py) {
+        Enemigo e = enemigoPorIdOnline.get(enemyId);
+        if (e == null) return;
+        Body b = e.getCuerpoFisico();
+        if (b == null) return;
+        b.setTransform(px, py, b.getAngle());
+        b.setLinearVelocity(0f, 0f);
+    }
+
+    public void despawnEnemyOnline(int enemyId) {
+        Enemigo e = enemigoPorIdOnline.remove(enemyId);
+        if (e == null) return;
+        eliminarEnemigo(e);
     }
 
     public List<Item> getItemsMundo() {

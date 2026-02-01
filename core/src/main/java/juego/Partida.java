@@ -283,6 +283,21 @@ public class Partida {
 
         aplicarContexto(ctx);
 
+        // ✅ asegurar bodies en el world actual y spawnear en la sala actual (especialmente al cambiar de nivel)
+        // Importante: al recrear el World en un nuevo nivel, hay que recrear/respawnear los bodies de los jugadores.
+        if (gestorEntidades != null && jugador1 != null && jugador2 != null && salaActual != null) {
+            gestorEntidades.forzarRespawnJugadoresEnWorldActual(jugador1, jugador2, salaActual);
+        }
+
+        // ✅ ONLINE: el cliente NO spawnea ni simula enemigos.
+        // Los enemigos vienen por red (SpawnEnemy/UpdateEnemy) desde el server.
+        if (redPartida.isModoOnline() && gestorEntidades != null) {
+            gestorEntidades.eliminarTodosLosEnemigos();
+            if (controlPuzzle != null && salaActual != null) {
+                controlPuzzle.setEnemigosVivos(salaActual, 0);
+            }
+        }
+
         ColisionesDesdeTiled.crearColisiones(mapaTiled, world);
 
 
@@ -319,7 +334,8 @@ public class Partida {
             camaraSala,
             sistemaTransicionSala,
             procesadorColasEventos,
-            sistemaSprites
+            sistemaSprites,
+            redPartida
         );
 
         canalRenderizado = new CanalRenderizadoPartida(
@@ -341,7 +357,6 @@ public class Partida {
         jugador2.reaplicarEfectosDeItems();
 
         // 8) asegurar bodies
-        //gestorEntidades.forzarRespawnJugadoresEnWorldActual(jugador1, jugador2, salaActual);
 
         // ✅ si venís haciendo debug, dejalo (no afecta)
         SpritesEntidad s1 = sistemaSprites.get(jugador1);
@@ -515,6 +530,13 @@ public class Partida {
 
                 disposeNivel();
                 initNivel();
+
+                // ✅ ONLINE: cada cliente muestra el HUD de SU jugador.
+                int myId = redPartida.getMiPlayerId();
+                if (hud != null && myId > 0) {
+                    hud.setJugador(myId == 2 ? jugador2 : jugador1);
+                }
+
                 syncSalaOnline.reset();
                 resize(w, h);
                 return;
@@ -543,6 +565,20 @@ public class Partida {
         // ✅ ONLINE: mandar input + aplicar updates
         redPartida.enviarInputOnline(opcionesAbiertas, gameOverSolicitado);
         redPartida.aplicarUpdatesPendientes(jugador1, jugador2);
+        redPartida.aplicarRoomClearPendiente(controlPuzzle, sistemaSprites, salaActual);
+        int loserId = redPartida.consumirGameOverLoserId();
+        if (loserId > 0) {
+            notificarGameOver();
+        }
+
+
+        // ✅ MVP: mostrar vida del otro jugador (solo UI)
+        if (redPartida.isModoOnline() && hud != null) {
+            int oid = redPartida.getOtherPlayerId();
+            if (oid > 0) {
+                hud.setOtherState(oid, redPartida.getOtherVida(), redPartida.getOtherVidaMax());
+            }
+        }
 
 
 // ✅ ONLINE: aplicar cambio de sala enviado por el server

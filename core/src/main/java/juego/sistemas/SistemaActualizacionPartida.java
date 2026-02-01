@@ -31,13 +31,15 @@ public final class SistemaActualizacionPartida {
     private final ProcesadorColasEventos procesadorEventos;
     private final SistemaSpritesEntidades sprites;
 
+    private final RedPartidaCliente red;
     public SistemaActualizacionPartida(
             GestorDeEntidades gestorEntidades,
             FisicaMundo fisica,
             CamaraDeSala camaraSala,
             SistemaTransicionSala transicionSala,
             ProcesadorColasEventos procesadorEventos,
-            SistemaSpritesEntidades sprites
+            SistemaSpritesEntidades sprites,
+            RedPartidaCliente red
     ) {
         this.gestorEntidades = gestorEntidades;
         this.fisica = fisica;
@@ -45,6 +47,7 @@ public final class SistemaActualizacionPartida {
         this.transicionSala = transicionSala;
         this.procesadorEventos = procesadorEventos;
         this.sprites = sprites;
+        this.red = red;
     }
 
     public Habitacion actualizar(ContextoActualizacionPartida ctx) {
@@ -140,9 +143,11 @@ public final class SistemaActualizacionPartida {
 
             // 🔘 BOTONES: SIEMPRE (offline y online)
             Consumer<Habitacion> matarEnemigos =
-                (sprites != null)
+                (!esOnline && sprites != null)
                     ? sprites::matarEnemigosDeSalaConAnim
-                    : null;
+                    : (esOnline && red != null)
+                        ? (s) -> red.enviarRoomClearReq(s)
+                        : null;
 
             procesadorEventos.procesarBotonesPendientes(
                 eventos,
@@ -172,6 +177,13 @@ public final class SistemaActualizacionPartida {
                 eventos.limpiar(juego.eventos.EventoDanio.class);
                 eventos.limpiar(juego.eventos.EventoPickup.class);
                 // 🚪 EventoPuerta NO se toca acá (lo maneja SistemaTransicionSala)
+
+                // 📦 Items: spawns/despawns vienen por red (server-driven)
+                if (redPartida != null) {
+                    redPartida.aplicarEventosItems(gestorEntidades);
+                    // 👾 Enemigos: spawns/updates vienen por red (server-driven)
+                    redPartida.aplicarEventosEnemigos(gestorEntidades);
+                }
             }
         }
 

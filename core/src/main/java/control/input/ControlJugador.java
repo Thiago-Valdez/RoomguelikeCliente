@@ -35,16 +35,10 @@ public class ControlJugador {
     public void actualizar(float delta) {
         Body cuerpo = jugador.getCuerpoFisico();
         if (cuerpo == null) return;
-        float vstat = jugador.getVelocidad();
-        Vector2 v0 = cuerpo.getLinearVelocity().cpy();
 
-        cuerpo.setLinearVelocity(dir.x * vstat, dir.y * vstat);
-
-        Vector2 v1 = cuerpo.getLinearVelocity().cpy();
-        //Gdx.app.log("SPD", "stat=" + vstat + " before=" + v0 + " after=" + v1);
-
+        // ✅ Si estamos en pausa (o en modo online con input deshabilitado), no movemos nada.
         if (enPausa || !jugador.puedeMoverse()) {
-            cuerpo.setLinearVelocity(0, 0);
+            cuerpo.setLinearVelocity(0f, 0f);
             return;
         }
 
@@ -57,7 +51,7 @@ public class ControlJugador {
         dir.set(dx, dy);
 
         if (dir.len2() == 0) {
-            cuerpo.setLinearVelocity(0, 0);
+            cuerpo.setLinearVelocity(0f, 0f);
             return;
         }
 

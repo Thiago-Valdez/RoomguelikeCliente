@@ -43,7 +43,12 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     private static final String PATH_ITEM_UNKNOWN = "Hud/items/item_unknown.png"; // opcional fallback
 
     private final DisposicionMapa disposicion;
-    private final Jugador jugador;
+    private Jugador jugador;
+
+    // MVP: UI del otro jugador (solo vida)
+    private int otherPlayerId = -1;
+    private int otherVida = 0;
+    private int otherVidaMax = 0;
 
     private Habitacion salaActual;
     private final LayoutMinimapa layout;
@@ -85,6 +90,18 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         font = new BitmapFont();
 
         cargarTexturasHud();
+    }
+
+    /** Permite que en ONLINE el HUD apunte al jugador local (P1 o P2). */
+    public void setJugador(Jugador jugador) {
+        if (jugador != null) this.jugador = jugador;
+    }
+
+    /** MVP: setea vida del otro jugador (para mostrarla en HUD). */
+    public void setOtherState(int otherPlayerId, int vida, int vidaMax) {
+        this.otherPlayerId = otherPlayerId;
+        this.otherVida = Math.max(0, vida);
+        this.otherVidaMax = Math.max(0, vidaMax);
     }
 
     private void cargarTexturasHud() {
@@ -170,6 +187,17 @@ public class HudJuego implements Disposable, ListenerCambioSala {
             StringBuilder sb = new StringBuilder("Vida: ");
             for (int i = 0; i < vidaMax; i++) sb.append(i < vidaActual ? "♥" : "♡");
             font.draw(batch, sb.toString(), x, yTop);
+        }
+
+        // =====================
+        // MVP: vida del otro jugador (texto simple, no inventario)
+        // =====================
+        if (otherPlayerId > 0 && otherVidaMax > 0) {
+            String txt = "J" + otherPlayerId + ": " + otherVida + "/" + otherVidaMax;
+            // arriba-derecha
+            float tx = HUD_W - padding - 140f;
+            float ty = yTop;
+            font.draw(batch, txt, tx, ty);
         }
     }
 

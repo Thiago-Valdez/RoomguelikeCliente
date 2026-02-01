@@ -130,7 +130,140 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "Disconnect": {
+            case "SpawnItem": {
+                // SpawnItem:id:tipo:x:y
+                if (parts.length >= 5) {
+                    Integer itemId = parseInt(parts[1]);
+                    String tipo = parts[2];
+                    Float x = parseFloat(parts[3]);
+                    Float y = parseFloat(parts[4]);
+                    if (itemId != null && x != null && y != null) {
+                        controller.spawnItem(itemId, tipo, x, y);
+                    }
+                }
+                break;
+            }
+
+            case "DespawnItem": {
+                if (parts.length >= 2) {
+                    Integer itemId = parseInt(parts[1]);
+                    if (itemId != null) controller.despawnItem(itemId);
+                }
+                break;
+            }
+
+            case "PickupItem": {
+                // PickupItem:jugadorId:itemId:tipo
+                if (parts.length >= 4) {
+                    Integer jugadorId = parseInt(parts[1]);
+                    Integer itemId = parseInt(parts[2]);
+                    String tipo = parts[3];
+                    if (jugadorId != null && itemId != null) {
+                        controller.pickupItem(jugadorId, itemId, tipo);
+                    }
+                }
+                break;
+            }
+
+            case "Hud": {
+                // Hud:playerId:vida:vidaMax:tiposCsv
+                if (parts.length >= 4) {
+                    Integer playerId = parseInt(parts[1]);
+                    Integer vida = parseInt(parts[2]);
+                    Integer vidaMax = parseInt(parts[3]);
+                    String tiposCsv = (parts.length >= 5) ? parts[4] : "";
+                    if (playerId != null && vida != null && vidaMax != null) {
+                        controller.hud(playerId, vida, vidaMax, tiposCsv);
+                    }
+                }
+                break;
+            }
+
+            case "Other": {
+                // Other:otherPlayerId:vida:vidaMax
+                if (parts.length >= 4) {
+                    Integer otherId = parseInt(parts[1]);
+                    Integer vida = parseInt(parts[2]);
+                    Integer vidaMax = parseInt(parts[3]);
+                    if (otherId != null && vida != null && vidaMax != null) {
+                        controller.other(otherId, vida, vidaMax);
+                    }
+                }
+                break;
+            }
+
+            case "SpawnEnemy": {
+                // SpawnEnemy:id:nombre:x:y:sala
+                if (parts.length >= 6) {
+                    Integer enemyId = parseInt(parts[1]);
+                    String nombre = parts[2];
+                    Float x = parseFloat(parts[3]);
+                    Float y = parseFloat(parts[4]);
+                    String sala = parts[5];
+                    if (enemyId != null && x != null && y != null) {
+                        controller.spawnEnemy(enemyId, nombre, x, y, sala);
+                    }
+                }
+                break;
+            }
+
+            case "UpdateEnemy": {
+                if (parts.length >= 4) {
+                    Integer enemyId = parseInt(parts[1]);
+                    Float x = parseFloat(parts[2]);
+                    Float y = parseFloat(parts[3]);
+                    if (enemyId != null && x != null && y != null) {
+                        controller.updateEnemy(enemyId, x, y);
+                    }
+                }
+                break;
+            }
+
+            case "DespawnEnemy": {
+                if (parts.length >= 2) {
+                    Integer enemyId = parseInt(parts[1]);
+                    if (enemyId != null) controller.despawnEnemy(enemyId);
+                }
+                break;
+            }
+
+            case "RoomClear": {
+                if (parts.length >= 2) {
+                    controller.roomClear(parts[1]);
+                }
+                break;
+            }
+
+            case "Damage": {
+                // Damage:playerId:vida:vidaMax
+                if (parts.length >= 4) {
+                    Integer playerId = parseInt(parts[1]);
+                    Integer vida = parseInt(parts[2]);
+                    Integer vidaMax = parseInt(parts[3]);
+                    if (playerId != null && vida != null && vidaMax != null) {
+                        controller.damage(playerId, vida, vidaMax);
+                    }
+                }
+                break;
+            }
+
+            case "Dead": {
+                if (parts.length >= 2) {
+                    Integer playerId = parseInt(parts[1]);
+                    if (playerId != null) controller.dead(playerId);
+                }
+                break;
+            }
+
+                        case "GameOver": {
+                if (parts.length >= 2) {
+                    Integer loserId = parseInt(parts[1]);
+                    if (loserId != null) controller.gameOver(loserId);
+                }
+                break;
+            }
+
+case "Disconnect": {
                 controller.disconnect("Server closed");
                 break;
             }

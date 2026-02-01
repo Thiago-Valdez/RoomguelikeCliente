@@ -10,6 +10,7 @@ import entidades.Entidad;
 import entidades.datos.Estilo;
 import entidades.datos.Genero;
 import entidades.items.Item;
+import entidades.items.ItemTipo;
 
 public class Jugador extends Entidad {
 
@@ -180,6 +181,36 @@ public class Jugador extends Entidad {
         if (vida > vidaMaxima) vida = vidaMaxima;
 
         for (Item item : objetos) item.aplicarModificacion(this);
+    }
+
+    // =========================
+    // ✅ ONLINE / HUD (server-driven)
+    // =========================
+
+    /**
+     * Setea inventario desde servidor SIN aplicar efectos locales.
+     * Formato: "TIPO1,TIPO2,..." (puede venir vacío).
+     */
+    public void setInventarioRemoto(String tiposCsv) {
+        objetos.clear();
+
+        if (tiposCsv == null) return;
+        String s = tiposCsv.trim();
+        if (s.isEmpty()) return;
+
+        String[] parts = s.split(",");
+        for (String p : parts) {
+            if (p == null) continue;
+            String t = p.trim();
+            if (t.isEmpty()) continue;
+            try {
+                ItemTipo tipo = ItemTipo.valueOf(t);
+                // Crear un Item "dummy" sin efecto (solo para HUD)
+                Item inst = tipo.crearInstancia();
+                objetos.add(new Item(inst.getNombre(), tipo, null));
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     // =========================

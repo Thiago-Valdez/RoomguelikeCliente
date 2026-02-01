@@ -63,19 +63,8 @@ public final class SistemaTransicionSala {
         EventoPuerta ev = eventos.pollFirst(EventoPuerta.class);
         if (ev == null) return salaActual;
 
-        // ✅ ONLINE: avisar al server y NO teletransportar acá
+        // ✅ ONLINE: el cambio de sala lo decide el SERVER (por contacto autoritativo)
         if (esOnline) {
-            if (redPartida != null) {
-                String origen = ev.puerta().origen().name();
-                String destino = ev.puerta().destino().name();
-                String dir = ev.puerta().direccion().name();
-
-                Gdx.app.log("NET", "PUERTA ONLINE -> enviar Door " + origen + " -> " + destino + " (" + dir + ")");
-                redPartida.enviarPuertaOnline(origen, destino, dir);
-            } else {
-                Gdx.app.log("NET", "PUERTA ONLINE pero redPartida == null (no se envía Door)");
-            }
-
             framesBloqueoPuertas = 15;
             eventos.limpiar(EventoPuerta.class);
             return salaActual;
