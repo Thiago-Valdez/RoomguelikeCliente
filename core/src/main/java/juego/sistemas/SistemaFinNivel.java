@@ -50,7 +50,11 @@ public final class SistemaFinNivel {
         return trampillaBody != null;
     }
 
-    public void limpiar(FisicaMundo fisica) {
+    public void reset() {
+    trampillaBody = null;
+}
+
+public void limpiar(FisicaMundo fisica) {
         if (fisica == null) return;
         if (trampillaBody != null) {
             fisica.destruirBody(trampillaBody);

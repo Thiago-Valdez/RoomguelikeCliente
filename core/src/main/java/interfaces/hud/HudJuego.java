@@ -45,6 +45,9 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     private final DisposicionMapa disposicion;
     private Jugador jugador;
 
+    // ✅ ONLINE: el HUD es autoritativo del server. Hasta recibir snapshot mostramos placeholder.
+    private boolean sincronizando = false;
+
     // MVP: UI del otro jugador (solo vida)
     private int otherPlayerId = -1;
     private int otherVida = 0;
@@ -95,6 +98,11 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     /** Permite que en ONLINE el HUD apunte al jugador local (P1 o P2). */
     public void setJugador(Jugador jugador) {
         if (jugador != null) this.jugador = jugador;
+    }
+
+    /** ONLINE: si true, no dibuja corazones/slots reales y muestra "Sincronizando...". */
+    public void setSincronizando(boolean sincronizando) {
+        this.sincronizando = sincronizando;
     }
 
     /** MVP: setea vida del otro jugador (para mostrarla en HUD). */
@@ -170,6 +178,12 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     // ============================================================
 
     private void dibujarVida() {
+        if (sincronizando) {
+            float x = padding;
+            float yTop = HUD_H - padding;
+            font.draw(batch, "Sincronizando HUD...", x, yTop);
+            return;
+        }
         int vidaActual = jugador.getVida();
         int vidaMax = jugador.getVidaMaxima();
 
@@ -206,6 +220,12 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     // ============================================================
 
     private void dibujarItemsSlots() {
+        if (sincronizando) {
+            float x = padding;
+            float y = HUD_H - padding - iconSize - 20f;
+            font.draw(batch, "Items: (esperando server)", x, y);
+            return;
+        }
         if (slot == null) {
             // Fallback texto (si falta el slot)
             float x = padding;

@@ -279,8 +279,6 @@ public class Partida {
             j1,
             j2
         );
-        redPartida.setMundoListo(true);
-
         aplicarContexto(ctx);
 
         // ✅ asegurar bodies en el world actual y spawnear en la sala actual (especialmente al cambiar de nivel)
@@ -288,6 +286,10 @@ public class Partida {
         if (gestorEntidades != null && jugador1 != null && jugador2 != null && salaActual != null) {
             gestorEntidades.forzarRespawnJugadoresEnWorldActual(jugador1, jugador2, salaActual);
         }
+
+        // ✅ Mundo listo recién después de recrear World + bodies (evita crash nativo Box2D)
+        redPartida.setMundoListo(true);
+
 
         // ✅ ONLINE: el cliente NO spawnea ni simula enemigos.
         // Los enemigos vienen por red (SpawnEnemy/UpdateEnemy) desde el server.
@@ -528,8 +530,16 @@ public class Partida {
                 int w = Gdx.graphics.getWidth();
                 int h = Gdx.graphics.getHeight();
 
-                disposeNivel();
+                if (sistemaFinNivel != null) {
+    sistemaFinNivel.reset();
+}
+disposeNivel();
                 initNivel();
+
+                // ✅ ONLINE: el HUD debe venir SIEMPRE del server.
+                // Reseteamos estado local y pedimos snapshot apenas el mundo está listo.
+                redPartida.resetHudSincronizado();
+                redPartida.enviarReadyOnline();
 
                 // ✅ ONLINE: cada cliente muestra el HUD de SU jugador.
                 int myId = redPartida.getMiPlayerId();
@@ -565,6 +575,13 @@ public class Partida {
         // ✅ ONLINE: mandar input + aplicar updates
         redPartida.enviarInputOnline(opcionesAbiertas, gameOverSolicitado);
         redPartida.aplicarUpdatesPendientes(jugador1, jugador2);
+
+        // ✅ ONLINE: el HUD debe ser autoritativo del server (no mostrar defaults locales)
+        if (redPartida.isModoOnline() && hud != null) {
+            hud.setSincronizando(!redPartida.isHudSincronizado());
+        } else if (hud != null) {
+            hud.setSincronizando(false);
+        }
         redPartida.aplicarRoomClearPendiente(controlPuzzle, sistemaSprites, salaActual);
         int loserId = redPartida.consumirGameOverLoserId();
         if (loserId > 0) {
@@ -644,7 +661,13 @@ public class Partida {
             if (ev.sala() == salaActual) avanzar[0] = true;
         });
         if (avanzar[0]) {
-            avanzarAlSiguienteNivel();
+            // ✅ ONLINE: el server es autoritativo. El cliente NO avanza el nivel por su cuenta,
+            // porque eso desincroniza seed/nivel/posiciones.
+            if (redPartida.isModoOnline()) {
+                redPartida.enviarNextLevelRequest(); // fallback (el server igual puede detectarlo por colisión)
+            } else {
+                avanzarAlSiguienteNivel();
+            }
             return;
         }
 
@@ -692,7 +715,10 @@ public class Partida {
             seedActual = System.currentTimeMillis();
         }
 
-        disposeNivel();
+        if (sistemaFinNivel != null) {
+    sistemaFinNivel.reset();
+}
+disposeNivel();
         initNivel();
         resize(w, h);
     }
@@ -800,6 +826,15 @@ public class Partida {
     }
 
     private void disposeNivel() {
+
+        // ✅ CRÍTICO: si los jugadores persisten entre niveles, sus bodies NO pueden quedar apuntando al World viejo
+        if (jugador1 != null) jugador1.setCuerpoFisico(null);
+        if (jugador2 != null) jugador2.setCuerpoFisico(null);
+
+        // (opcional pero recomendable) también limpiar controles si dependen del body
+        // if (controlJugador1 != null) controlJugador1.setBody(null);
+        // if (controlJugador2 != null) controlJugador2.setBody(null);
+
         if (mapaRenderer != null) { mapaRenderer.dispose(); mapaRenderer = null; }
         if (mapaTiled != null) { mapaTiled.dispose(); mapaTiled = null; }
 

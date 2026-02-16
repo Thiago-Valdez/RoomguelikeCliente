@@ -124,6 +124,11 @@ public class RedPartidaCliente implements GameController {
     // =====================
     // HUD / Inventario (server-driven)
     // =====================
+
+    // ✅ En ONLINE el HUD es autoritativo del server.
+    // Hasta recibir el primer snapshot Hud del server, el HUD debe mostrarse como "sin sincronizar".
+    private volatile boolean hudSincronizado = false;
+
     private static final class HudEv {
         final int playerId;
         final int vida;
@@ -140,6 +145,15 @@ public class RedPartidaCliente implements GameController {
 
     private final Object lockHud = new Object();
     private final ArrayDeque<HudEv> hudPendiente = new ArrayDeque<>();
+
+    public boolean isHudSincronizado() {
+        return hudSincronizado;
+    }
+
+    /** Resetea el estado de HUD (por ejemplo al recibir Start / cambio de nivel). */
+    public void resetHudSincronizado() {
+        hudSincronizado = false;
+    }
 
     // =====================
     // MVP: UI del otro jugador (solo vida)
@@ -198,6 +212,10 @@ public class RedPartidaCliente implements GameController {
         }
 
         salaPendiente = null;
+
+        hudSincronizado = false;
+
+        hudSincronizado = false;
         motivoDisconnect = null;
         gameOverRecibido = false;
         loserId = -1;
@@ -289,6 +307,14 @@ public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicita
 
         client.sendMessage("Move:" + dx + ":" + dy);
     }
+
+    public void enviarNextLevelRequest() {
+        // Fallback: si el cliente cree que tocó la trampilla, le pide al server el cambio de nivel.
+        // El server valida si corresponde (autoridad).
+        if (!modoOnline || !onlineArrancado || client == null) return;
+        client.sendMessage("NextLevelReq");
+    }
+
 
     // ✅ Mantengo compat: con playerId o sin playerId (server acepta ambos)
     public void enviarPuertaOnline(String origen, String destino, String dir) {
@@ -433,6 +459,11 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
 
                 // Inventario: lista de ItemTipo separada por ',' (puede venir vacía)
                 j.setInventarioRemoto(ev.tiposCsv);
+
+                // ✅ Primer snapshot aplicado => HUD sincronizado
+                if (miPlayerId > 0 && ev.playerId == miPlayerId) {
+                    hudSincronizado = true;
+                }
             }
         }
     }
@@ -543,6 +574,9 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
 
     @Override
     public void start(long seed, int nivel) {
+        // ✅ TRANSICIÓN DE NIVEL: mientras el hilo render recrea World, no aplicar Box2D ni samples
+        this.mundoListo = false;
+
         this.seedServidor = seed;
         this.nivelServidor = nivel;
 
@@ -550,6 +584,9 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
             samplesPorJugador.clear();
         }
         salaPendiente = null;
+
+        // ✅ nuevo nivel => HUD debe re-sincronizarse por snapshot del server
+        hudSincronizado = false;
 
         this.startRecibido = true;
         this.onlineArrancado = true;
@@ -563,8 +600,19 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
         Gdx.app.log(TAG, "Start recibido seed=" + seed + " nivel=" + nivel);
     }
 
+    /** Pide al server un snapshot completo de HUD/Inventario (usar cuando el mundo ya está listo). */
+    public void enviarReadyOnline() {
+        if (!modoOnline || client == null) return;
+        // Ready:playerId (playerId opcional, lo mando para debug)
+        if (miPlayerId > 0) client.sendMessage("Ready:" + miPlayerId);
+        else client.sendMessage("Ready");
+    }
+
     @Override
     public void updatePlayerPosition(int playerId, float x, float y) {
+        if (!modoOnline) return;
+        if (!mundoListo) return; // durante transición de nivel, ignoramos posiciones para evitar crash nativo
+
         final long nowMs = System.currentTimeMillis();
         synchronized (samplesPorJugador) {
             Deque<Sample> q = samplesPorJugador.computeIfAbsent(playerId, k -> new ArrayDeque<>());
