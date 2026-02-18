@@ -52,8 +52,11 @@ public class JuegoPrincipal implements Screen {
             client.start();
             System.out.println("[JP] Thread state AFTER start = " + client.getState());
 
-            client.sendMessage("Connect");
-            System.out.println("[JP] Connect enviado");
+            String genero = (game.getGeneroSeleccionado() != null) ? game.getGeneroSeleccionado().name() : "MASCULINO";
+            String estilo = (game.getEstiloSeleccionado() != null) ? game.getEstiloSeleccionado().name() : "CLASICO";
+            redController.setMiAparienciaDeseada(genero, estilo);
+            client.sendMessage("Connect:" + genero + ":" + estilo);
+            System.out.println("[JP] Connect enviado (apariencia)");
         } else {
             System.out.println("[JP] ONLINE DESACTIVADO: no se crea ClientThread");
         }

@@ -45,8 +45,6 @@ public class ClientThread extends Thread {
         System.out.println("[CLIENT] run() arrancó");
 
         try {
-            sendMessage("Connect");
-
             byte[] buffer = new byte[BUFFER_SIZE];
             DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 
@@ -95,6 +93,18 @@ public class ClientThread extends Thread {
                 }
                 break;
             }
+
+            case "Appearance": {
+                // Appearance:playerId:GENERO:ESTILO
+                if (parts.length >= 4) {
+                    Integer id = parseInt(parts[1]);
+                    String genero = parts[2];
+                    String estilo = parts[3];
+                    if (id != null) controller.appearance(id, genero, estilo);
+                }
+                break;
+            }
+
 
             case "Start": {
                 long seed = (parts.length >= 2) ? parseLongOr(parts[1], 0L) : 0L;

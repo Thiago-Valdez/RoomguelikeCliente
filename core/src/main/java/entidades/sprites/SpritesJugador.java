@@ -3,6 +3,8 @@ package entidades.sprites;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import entidades.datos.Genero;
+import entidades.datos.Estilo;
+import com.badlogic.gdx.Gdx;
 import entidades.personajes.Jugador;
 
 /**
@@ -14,6 +16,9 @@ import entidades.personajes.Jugador;
 public class SpritesJugador extends SpritesEntidad {
 
     private final Jugador jugador;
+
+    private Genero ultimoGeneroCargado = null;
+    private Estilo ultimoEstiloCargado = null;
 
     // --------- control de anim (online-friendly) ----------
     private boolean moviendoOverride = false;
@@ -31,26 +36,12 @@ public class SpritesJugador extends SpritesEntidad {
         super(jugador, frameW, frameH);
         this.jugador = jugador;
 
+
+        ultimoGeneroCargado = jugador.getGenero();
+        ultimoEstiloCargado = jugador.getEstilo();
+
         cargar();
         construirAnimaciones();
-    }
-
-    @Override
-    protected String pathQuieto() {
-        String base = (jugador.getGenero() == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
-        return "Jugadores/" + base + "_quieto.png";
-    }
-
-    @Override
-    protected String pathMovimiento() {
-        String base = (jugador.getGenero() == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
-        return "Jugadores/" + base + "_movimiento.png";
-    }
-
-    @Override
-    protected String pathMuerte() {
-        String base = (jugador.getGenero() == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
-        return "Jugadores/" + base + "_muerte.png";
     }
 
     /**
@@ -130,7 +121,36 @@ public class SpritesJugador extends SpritesEntidad {
         return (dx * dx + dy * dy) > EPS2;
     }
 
-    @Override
+
+private void recargarSiCambioApariencia() {
+    Genero g = jugador.getGenero();
+    Estilo e = jugador.getEstilo();
+
+    if (g == ultimoGeneroCargado && e == ultimoEstiloCargado) return;
+
+    try {
+        if (texQuieto != null) texQuieto.dispose();
+        if (texMovimiento != null) texMovimiento.dispose();
+        if (texMuerte != null) texMuerte.dispose();
+    } catch (Exception ignored) {}
+
+    texQuieto = null;
+    texMovimiento = null;
+    texMuerte = null;
+
+    // reset anim timers para evitar "saltos"
+    stateTime = 0f;
+    tiempoAnim = 0f;
+    muerteTime = 0f;
+
+    cargar();
+    construirAnimaciones();
+
+    ultimoGeneroCargado = g;
+    ultimoEstiloCargado = e;
+}
+
+@Override
     public void render(SpriteBatch batch) {
         if (batch == null) return;
         if (entidad == null || entidad.getCuerpoFisico() == null) return;
@@ -157,9 +177,9 @@ public class SpritesJugador extends SpritesEntidad {
 
     @Override
     public void update(float delta) {
+        recargarSiCambioApariencia();
         super.update(delta);
-
-        // ✅ muerte sincronizada con estado real del jugador
+// ✅ muerte sincronizada con estado real del jugador
         if (jugador.estaEnMuerte()) {
             iniciarMuerte();
         } else {
@@ -167,5 +187,38 @@ public class SpritesJugador extends SpritesEntidad {
                 detenerMuerte();
             }
         }
+    }
+
+
+    private String baseConEstilo() {
+        String base = (jugador.getGenero() == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
+        int estiloNum = (jugador.getEstilo() != null) ? (jugador.getEstilo().ordinal() + 1) : 1;
+        return base + estiloNum; // ej: jugador_fem2
+    }
+
+    private String baseSinEstilo() {
+        return (jugador.getGenero() == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
+    }
+
+    private String elegirPath(String sufijo) {
+        String conEstilo = "Jugadores/" + baseConEstilo() + "_" + sufijo + ".png";
+        if (Gdx.files.internal(conEstilo).exists()) return conEstilo;
+
+        return "Jugadores/" + baseSinEstilo() + "_" + sufijo + ".png";
+    }
+
+    @Override
+    protected String pathQuieto() {
+        return elegirPath("quieto");
+    }
+
+    @Override
+    protected String pathMovimiento() {
+        return elegirPath("movimiento");
+    }
+
+    @Override
+    protected String pathMuerte() {
+        return elegirPath("muerte");
     }
 }

@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
@@ -44,6 +45,9 @@ public class HudJuego implements Disposable, ListenerCambioSala {
 
     private final DisposicionMapa disposicion;
     private Jugador jugador;
+
+    // ✅ ONLINE: el HUD es autoritativo del server. Hasta recibir snapshot mostramos placeholder.
+    private boolean sincronizando = false;
 
     // MVP: UI del otro jugador (solo vida)
     private int otherPlayerId = -1;
@@ -95,6 +99,11 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     /** Permite que en ONLINE el HUD apunte al jugador local (P1 o P2). */
     public void setJugador(Jugador jugador) {
         if (jugador != null) this.jugador = jugador;
+    }
+
+    /** ONLINE: si true, no dibuja corazones/slots reales y muestra "Sincronizando...". */
+    public void setSincronizando(boolean sincronizando) {
+        this.sincronizando = sincronizando;
     }
 
     /** MVP: setea vida del otro jugador (para mostrarla en HUD). */
@@ -170,6 +179,12 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     // ============================================================
 
     private void dibujarVida() {
+        if (sincronizando) {
+            float x = padding;
+            float yTop = HUD_H - padding;
+            font.draw(batch, "Sincronizando HUD...", x, yTop);
+            return;
+        }
         int vidaActual = jugador.getVida();
         int vidaMax = jugador.getVidaMaxima();
 
@@ -190,22 +205,45 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         }
 
         // =====================
-        // MVP: vida del otro jugador (texto simple, no inventario)
+        // VIDA del otro jugador (corazones)
         // =====================
         if (otherPlayerId > 0 && otherVidaMax > 0) {
-            String txt = "J" + otherPlayerId + ": " + otherVida + "/" + otherVidaMax;
-            // arriba-derecha
-            float tx = HUD_W - padding - 140f;
-            float ty = yTop;
-            font.draw(batch, txt, tx, ty);
+            float yTop2 = yTop;
+            float y2 = yTop2 - iconSize;
+
+            // Título (J2 / J1) arriba-derecha
+            String nombre = "J" + otherPlayerId;
+            float titleX = HUD_W - padding - 40f;
+            font.draw(batch, nombre, titleX, yTop2);
+
+            // Corazones alineados a la derecha
+            float totalW = otherVidaMax * iconSize + (otherVidaMax - 1) * 4f;
+            float startX = HUD_W - padding - totalW;
+
+            if (heartFull != null && heartEmpty != null) {
+                for (int i = 0; i < otherVidaMax; i++) {
+                    TextureRegion tr = (i < otherVida) ? heartFull : heartEmpty;
+                    batch.draw(tr, startX + i * (iconSize + 4f), y2, iconSize, iconSize);
+                }
+            } else {
+                // Fallback texto si faltan assets
+                String txtVida = nombre + ": " + otherVida + "/" + otherVidaMax;
+                font.draw(batch, txtVida, HUD_W - padding - 140f, yTop2);
+            }
         }
-    }
+}
 
     // ============================================================
     // ITEMS (slots + iconos por ItemTipo, carga lazy desde assets/Items)
     // ============================================================
 
     private void dibujarItemsSlots() {
+        if (sincronizando) {
+            float x = padding;
+            float y = HUD_H - padding - iconSize - 20f;
+            font.draw(batch, "Items: (esperando server)", x, y);
+            return;
+        }
         if (slot == null) {
             // Fallback texto (si falta el slot)
             float x = padding;
@@ -319,6 +357,14 @@ public class HudJuego implements Disposable, ListenerCambioSala {
     private void dibujarMinimapaExplorado() {
         Set<Habitacion> descubiertas = disposicion.getDescubiertas();
 
+        // === Ajustes visuales del minimapa ===
+        // - Más abajo para no tapar la vida del otro jugador
+        // - Más transparente para no tapar la pantalla
+        final float MINIMAPA_OFFSET_Y = 85f;   // aumentá/achicá a gusto
+        final float BG_ALPHA = 0.22f;
+        final float PASILLO_ALPHA = 0.55f;
+        final float SALA_ALPHA = 0.60f;
+
         final float roomW = 18f;
         final float roomH = 14f;
         final float gap = 8f;
@@ -333,17 +379,21 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         float mapH = heightCells * roomH + (heightCells - 1) * gap;
 
         float baseX = HUD_W - mapW - 20f;
-        float baseY = HUD_H - mapH - 40f;
+        float baseY = HUD_H - mapH - 40f - MINIMAPA_OFFSET_Y;
+
+        // ✅ Para que la alpha funcione en ShapeRenderer
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         // Fondo
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(0f, 0f, 0f, 0.55f);
+        shapes.setColor(0f, 0f, 0f, BG_ALPHA);
         shapes.rect(baseX - 6, baseY - 6, mapW + 12, mapH + 12);
         shapes.end();
 
         // Pasillos
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(0.85f, 0.85f, 0.85f, 1f);
+        shapes.setColor(0.85f, 0.85f, 0.85f, PASILLO_ALPHA);
 
         for (Habitacion h : disposicion.getSalasActivas()) {
             if (!descubiertas.contains(h)) continue;
@@ -373,7 +423,7 @@ public class HudJuego implements Disposable, ListenerCambioSala {
             float x = baseX + (p.x() - minX) * (roomW + gap);
             float y = baseY + (p.y() - minY) * (roomH + gap);
 
-            setColorSala(shapes, h);
+            setColorSala(shapes, h, SALA_ALPHA);
             shapes.rect(x, y, roomW, roomH);
         }
         shapes.end();
@@ -397,14 +447,14 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         batch.end();
     }
 
-    private void setColorSala(ShapeRenderer sr, Habitacion h) {
+    private void setColorSala(ShapeRenderer sr, Habitacion h, float alpha) {
         switch (h.tipo) {
-            case INICIO -> sr.setColor(0.95f, 0.95f, 0.95f, 1f);
-            case ACERTIJO -> sr.setColor(0.35f, 0.65f, 1f, 1f);
-            case COMBATE -> sr.setColor(1f, 0.25f, 0.25f, 1f);
-            case BOTIN -> sr.setColor(1f, 1f, 0.35f, 1f);
-            case JEFE -> sr.setColor(0.85f, 0.35f, 1f, 1f);
-            default -> sr.setColor(0.6f, 0.6f, 0.6f, 1f);
+            case INICIO -> sr.setColor(0.95f, 0.95f, 0.95f, alpha);
+            case ACERTIJO -> sr.setColor(0.35f, 0.65f, 1f, alpha);
+            case COMBATE -> sr.setColor(1f, 0.25f, 0.25f, alpha);
+            case BOTIN -> sr.setColor(1f, 1f, 0.35f, alpha);
+            case JEFE -> sr.setColor(0.85f, 0.35f, 1f, alpha);
+            default -> sr.setColor(0.6f, 0.6f, 0.6f, alpha);
         }
     }
 

@@ -3,6 +3,9 @@ package red;
 public interface GameController {
     void connect(int playerId);
 
+    // Apariencia del jugador (género + estilo)
+    void appearance(int playerId, String genero, String estilo);
+
     // ✅ ahora Start lleva seed + nivel
     void start(long seed, int nivel);
 

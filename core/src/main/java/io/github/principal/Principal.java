@@ -5,12 +5,18 @@ import com.badlogic.gdx.Screen;
 import config.AudioManager;
 import config.Settings;
 import pantallas.MenuPrincipal;
+import entidades.datos.Genero;
+import entidades.datos.Estilo;
 
 public class Principal extends Game {
 
     public Settings settings;
     public AudioManager audio;
     private boolean modoOnline = false;
+
+    // Apariencia elegida en menú
+    private Genero generoSeleccionado = Genero.MASCULINO;
+    private Estilo estiloSeleccionado = Estilo.CLASICO;
 
     @Override
     public void create() {
@@ -48,6 +54,16 @@ public class Principal extends Game {
 
     public void setModoOnline(boolean modoOnline) {
         this.modoOnline = modoOnline;
+    }
+
+    public Genero getGeneroSeleccionado() { return generoSeleccionado; }
+    public void setGeneroSeleccionado(Genero generoSeleccionado) {
+        if (generoSeleccionado != null) this.generoSeleccionado = generoSeleccionado;
+    }
+
+    public Estilo getEstiloSeleccionado() { return estiloSeleccionado; }
+    public void setEstiloSeleccionado(Estilo estiloSeleccionado) {
+        if (estiloSeleccionado != null) this.estiloSeleccionado = estiloSeleccionado;
     }
 
 

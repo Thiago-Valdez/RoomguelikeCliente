@@ -68,7 +68,7 @@ public class MenuPrincipal implements Screen {
         btnJugar.addListener(new ClickListener() {
             @Override public void clicked(InputEvent event, float x, float y) {
                 game.setModoOnline(true);
-                game.cambiarPantalla(new JuegoPrincipal(game));
+                game.cambiarPantalla(new SeleccionPersonaje(game, MenuPrincipal.this));
             }
         });
 

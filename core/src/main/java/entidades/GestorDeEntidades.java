@@ -119,11 +119,12 @@ public class GestorDeEntidades {
     public Vector2 calcularSpawnParaJugador(int jugadorId, Habitacion sala) {
         if (sala == null) return new Vector2(0f, 0f);
 
-        float baseX = sala.gridX * sala.ancho;
-        float baseY = sala.gridY * sala.alto;
+        // ✅ Tamaño real de sala en el mundo (coincide con tu lógica de puertas)
+        final float ROOM_W = 512f;
+        final float ROOM_H = 512f;
 
-        float cx = baseX + sala.ancho / 2f;
-        float cy = baseY + sala.alto / 2f;
+        float cx = sala.gridX * ROOM_W + ROOM_W / 2f;
+        float cy = sala.gridY * ROOM_H + ROOM_H / 2f;
 
         float off = 32f;
 
@@ -133,27 +134,69 @@ public class GestorDeEntidades {
         return new Vector2(cx, cy);
     }
 
+
     /**
      * ✅ Respawn seguro en el World actual (cuando recreás World al cambiar de nivel)
+     * ✅ IMPORTANTE: usa los Jugador que recibe (j1/j2), NO el mapa interno "jugadores"
      */
-    public void forzarRespawnJugadoresEnWorldActual(
-        Jugador j1,
-        Jugador j2,
-        Habitacion sala
-    ) {
-        Vector2 spawn = new Vector2(
-            sala.gridX * sala.ancho + sala.ancho / 2f,
-            sala.gridY * sala.alto  + sala.alto  / 2f
-        );
+    public void forzarRespawnJugadoresEnWorldActual(Jugador j1, Jugador j2, Habitacion salaActual) {
+        if (salaActual == null) return;
+        if (world == null) return;
 
-        if (j1 != null && j1.getCuerpoFisico() != null) {
-            j1.getCuerpoFisico().setTransform(spawn.x - 32f, spawn.y, 0);
-            j1.getCuerpoFisico().setLinearVelocity(0, 0);
-        }
+        Vector2 spawn1 = calcularSpawnParaJugador(1, salaActual);
+        Vector2 spawn2 = calcularSpawnParaJugador(2, salaActual);
 
-        if (j2 != null && j2.getCuerpoFisico() != null) {
-            j2.getCuerpoFisico().setTransform(spawn.x + 32f, spawn.y, 0);
-            j2.getCuerpoFisico().setLinearVelocity(0, 0);
+        // ✅ Re-crear o mover el body del Jugador REAL (el que usa Partida)
+        respawnJugadorEnWorld(j1, spawn1.x, spawn1.y, 1);
+        respawnJugadorEnWorld(j2, spawn2.x, spawn2.y, 2);
+
+        // ✅ mantener stats después de recrear bodies / nivel
+        if (j1 != null) j1.reaplicarEfectosDeItems();
+        if (j2 != null) j2.reaplicarEfectosDeItems();
+    }
+
+    /**
+     * Crea o reubica el body de un jugador en ESTE world, usando el Jugador recibido.
+     * No depende de mapas internos.
+     */
+    private void respawnJugadorEnWorld(Jugador jugador, float px, float py, int idDebug) {
+        if (jugador == null) return;
+
+        Body body = jugador.getCuerpoFisico();
+
+        if (body == null || body.getWorld() != world) {
+            // Si el body es null o pertenece a otro World (nivel anterior), creamos uno nuevo en este World.
+            BodyDef bd = new BodyDef();
+            bd.type = BodyDef.BodyType.DynamicBody;
+            bd.position.set(px, py);
+            bd.fixedRotation = true;
+
+            Body newBody = world.createBody(bd);
+
+            CircleShape shape = new CircleShape();
+            shape.setRadius(12f);
+
+            FixtureDef fd = new FixtureDef();
+            fd.shape = shape;
+            fd.density = 1f;
+            fd.friction = 0f;
+
+            Fixture f = newBody.createFixture(fd);
+            f.setUserData("jugador");
+
+            shape.dispose();
+
+            // ✅ vincula body.userData = jugador también
+            jugador.setCuerpoFisico(newBody);
+
+            System.out.println("[GestorEntidades] Jugador" + idDebug + " respawn (nuevo body) en (" + px + "," + py + ")");
+        } else {
+            // Body válido en este World: solo teletransportamos
+            body.setTransform(px, py, body.getAngle());
+            body.setLinearVelocity(0f, 0f);
+            body.setAwake(true);
+
+            System.out.println("[GestorEntidades] Jugador" + idDebug + " respawn (mover) a (" + px + "," + py + ")");
         }
     }
 

@@ -23,6 +23,10 @@ public class RedPartidaCliente implements GameController {
 
     private ClientThread client;
 
+    // Apariencia que el jugador eligió en el menú (para aplicar localmente al conectarse)
+    private String miGeneroDeseado = "MASCULINO";
+    private String miEstiloDeseado = "CLASICO";
+
     // ===== Estado online =====
     private boolean modoOnline = false;
     private boolean onlineArrancado = false;
@@ -33,6 +37,10 @@ public class RedPartidaCliente implements GameController {
     private volatile long seedServidor = 0L;
     private volatile int nivelServidor = 1;
     private volatile boolean mundoListo = false;
+
+    // Apariencia recibida del servidor (playerId -> [genero, estilo])
+    private final Map<Integer, String[]> aparienciaPorJugador = new HashMap<>();
+    private final Map<Integer, Boolean> aparienciaAplicada = new HashMap<>();
 
     // ===== Sala pendiente =====
     private volatile String salaPendiente = null;
@@ -124,6 +132,11 @@ public class RedPartidaCliente implements GameController {
     // =====================
     // HUD / Inventario (server-driven)
     // =====================
+
+    // ✅ En ONLINE el HUD es autoritativo del server.
+    // Hasta recibir el primer snapshot Hud del server, el HUD debe mostrarse como "sin sincronizar".
+    private volatile boolean hudSincronizado = false;
+
     private static final class HudEv {
         final int playerId;
         final int vida;
@@ -140,6 +153,15 @@ public class RedPartidaCliente implements GameController {
 
     private final Object lockHud = new Object();
     private final ArrayDeque<HudEv> hudPendiente = new ArrayDeque<>();
+
+    public boolean isHudSincronizado() {
+        return hudSincronizado;
+    }
+
+    /** Resetea el estado de HUD (por ejemplo al recibir Start / cambio de nivel). */
+    public void resetHudSincronizado() {
+        hudSincronizado = false;
+    }
 
     // =====================
     // MVP: UI del otro jugador (solo vida)
@@ -174,7 +196,13 @@ public class RedPartidaCliente implements GameController {
         if (!modoOnline) limpiarEstadoOnline();
     }
 
-    public void setModoOnline(boolean online) {
+    
+
+    public void setMiAparienciaDeseada(String genero, String estilo) {
+        if (genero != null && !genero.isBlank()) this.miGeneroDeseado = genero;
+        if (estilo != null && !estilo.isBlank()) this.miEstiloDeseado = estilo;
+    }
+public void setModoOnline(boolean online) {
         this.modoOnline = online;
         if (!online) limpiarEstadoOnline();
     }
@@ -198,6 +226,10 @@ public class RedPartidaCliente implements GameController {
         }
 
         salaPendiente = null;
+
+        hudSincronizado = false;
+
+        hudSincronizado = false;
         motivoDisconnect = null;
         gameOverRecibido = false;
         loserId = -1;
@@ -290,6 +322,14 @@ public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicita
         client.sendMessage("Move:" + dx + ":" + dy);
     }
 
+    public void enviarNextLevelRequest() {
+        // Fallback: si el cliente cree que tocó la trampilla, le pide al server el cambio de nivel.
+        // El server valida si corresponde (autoridad).
+        if (!modoOnline || !onlineArrancado || client == null) return;
+        client.sendMessage("NextLevelReq");
+    }
+
+
     // ✅ Mantengo compat: con playerId o sin playerId (server acepta ambos)
     public void enviarPuertaOnline(String origen, String destino, String dir) {
         if (!modoOnline || !onlineArrancado || client == null) return;
@@ -306,8 +346,37 @@ public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicita
     // Aplicación de updates
     // =====================
 
+    
+
+private void aplicarAparienciasSiHaceFalta(Jugador jugador1, Jugador jugador2) {
+    if (jugador1 != null) aplicarAparienciaSiHaceFalta(jugador1);
+    if (jugador2 != null) aplicarAparienciaSiHaceFalta(jugador2);
+}
+
+private void aplicarAparienciaSiHaceFalta(Jugador j) {
+    int id = j.getId();
+    String[] ap = aparienciaPorJugador.get(id);
+    if (ap == null) return;
+
+    Boolean ok = aparienciaAplicada.get(id);
+    if (ok != null && ok) return;
+
+    try {
+        entidades.datos.Genero g = entidades.datos.Genero.valueOf(ap[0]);
+        entidades.datos.Estilo e = entidades.datos.Estilo.valueOf(ap[1]);
+        j.setGenero(g);
+        j.setEstilo(e);
+    } catch (Exception ignored) {
+        // si viene algo raro, ignorar
+    } finally {
+        aparienciaAplicada.put(id, true);
+    }
+}
+
     public void aplicarUpdatesPendientes(Jugador jugador1, Jugador jugador2) {
         if (!modoOnline || !mundoListo) return;
+
+        aplicarAparienciasSiHaceFalta(jugador1, jugador2);
 
         if (motivoDisconnect != null) {
             Gdx.app.log(TAG, "Disconnect reason: " + motivoDisconnect);
@@ -433,6 +502,11 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
 
                 // Inventario: lista de ItemTipo separada por ',' (puede venir vacía)
                 j.setInventarioRemoto(ev.tiposCsv);
+
+                // ✅ Primer snapshot aplicado => HUD sincronizado
+                if (miPlayerId > 0 && ev.playerId == miPlayerId) {
+                    hudSincronizado = true;
+                }
             }
         }
     }
@@ -539,10 +613,28 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
         this.miPlayerId = playerId;
         this.modoOnline = true;
         Gdx.app.log(TAG, "Connected. miPlayerId=" + miPlayerId);
+
+        // Aplicar localmente la apariencia elegida, sin esperar el broadcast
+        appearance(miPlayerId, miGeneroDeseado, miEstiloDeseado);
     }
+
+
+@Override
+public void appearance(int playerId, String genero, String estilo) {
+    if (playerId <= 0) return;
+    if (genero == null) genero = "MASCULINO";
+    if (estilo == null) estilo = "CLASICO";
+    aparienciaPorJugador.put(playerId, new String[]{genero, estilo});
+    aparienciaAplicada.put(playerId, false);
+    System.out.println("[NET] Appearance recv id=" + playerId + " " + genero + " " + estilo);
+}
+
 
     @Override
     public void start(long seed, int nivel) {
+        // ✅ TRANSICIÓN DE NIVEL: mientras el hilo render recrea World, no aplicar Box2D ni samples
+        this.mundoListo = false;
+
         this.seedServidor = seed;
         this.nivelServidor = nivel;
 
@@ -550,6 +642,9 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
             samplesPorJugador.clear();
         }
         salaPendiente = null;
+
+        // ✅ nuevo nivel => HUD debe re-sincronizarse por snapshot del server
+        hudSincronizado = false;
 
         this.startRecibido = true;
         this.onlineArrancado = true;
@@ -563,8 +658,19 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
         Gdx.app.log(TAG, "Start recibido seed=" + seed + " nivel=" + nivel);
     }
 
+    /** Pide al server un snapshot completo de HUD/Inventario (usar cuando el mundo ya está listo). */
+    public void enviarReadyOnline() {
+        if (!modoOnline || client == null) return;
+        // Ready:playerId (playerId opcional, lo mando para debug)
+        if (miPlayerId > 0) client.sendMessage("Ready:" + miPlayerId);
+        else client.sendMessage("Ready");
+    }
+
     @Override
     public void updatePlayerPosition(int playerId, float x, float y) {
+        if (!modoOnline) return;
+        if (!mundoListo) return; // durante transición de nivel, ignoramos posiciones para evitar crash nativo
+
         final long nowMs = System.currentTimeMillis();
         synchronized (samplesPorJugador) {
             Deque<Sample> q = samplesPorJugador.computeIfAbsent(playerId, k -> new ArrayDeque<>());

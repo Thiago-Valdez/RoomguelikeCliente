@@ -50,11 +50,24 @@ public final class SistemaFinNivel {
         return trampillaBody != null;
     }
 
+    public void reset() {
+        trampillaBody = null;
+    }
+
     public void limpiar(FisicaMundo fisica) {
-        if (fisica == null) return;
-        if (trampillaBody != null) {
-            fisica.destruirBody(trampillaBody);
+        try {
+            if (trampillaBody != null && fisica != null) {
+                com.badlogic.gdx.physics.box2d.World w = trampillaBody.getWorld();
+                if (w != null && !w.isLocked()) {
+                    fisica.destruirBody(trampillaBody);
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[SistemaFinNivel] limpiar(): body/world inválido, se ignora");
+        } finally {
+            trampillaBody = null;
         }
+
         trampillaBody = null;
         trampillaVisual = null;
         salaTrampilla = null;
