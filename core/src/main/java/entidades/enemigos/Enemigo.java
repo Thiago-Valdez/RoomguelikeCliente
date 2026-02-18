@@ -7,24 +7,15 @@ import entidades.Entidad;
 import entidades.personajes.Jugador;
 
 /**
- * Enemigo básico.
- * - No tiene vida (se elimina al resolver puzzle de sala).
- * - Persigue al jugador objetivo (1/2) o al más cercano (0).
- */
+* Enemigo básico.
+* - No tiene vida (se elimina al resolver puzzle de sala).
+* - Persigue al jugador objetivo (1/2) o al más cercano (0).
+*/
 public class Enemigo extends Entidad {
-
-    /**
-     * 0 = el más cercano
-     * 1 = jugador 1
-     * 2 = jugador 2
-     */
-    private int jugadorObjetivo;
-
-    // Parámetros simples para evitar vibración / “pegarse” al jugador
-    private float distanciaMinima = 0.35f; // unidades del mundo Box2D
-
-    // tmp para no alocar
-    private final Vector2 tmpDir = new Vector2();
+    @Override
+    public void actualizar(float delta) {
+        // intencional: se actualiza con contexto de jugadores
+    }
 
     public Enemigo(String nombre, float velocidad, Body cuerpoFisico, int jugadorObjetivo) {
         super(nombre, velocidad, cuerpoFisico);
@@ -77,15 +68,6 @@ public class Enemigo extends Entidad {
         cuerpoFisico.setLinearVelocity(tmpDir.x * v, tmpDir.y * v);
     }
 
-    @Override
-    public void actualizar(float delta) {
-        // intencional: se actualiza con contexto de jugadores
-    }
-
-    private void detenerFisico() {
-        if (cuerpoFisico != null) cuerpoFisico.setLinearVelocity(0f, 0f);
-    }
-
     private Jugador elegirObjetivo(Jugador j1, Jugador j2) {
         if (jugadorObjetivo == 1) return j1;
         if (jugadorObjetivo == 2) return j2;
@@ -113,4 +95,21 @@ public class Enemigo extends Entidad {
 
         return (d1 <= d2) ? j1 : j2;
     }
+
+    private void detenerFisico() {
+        if (cuerpoFisico != null) cuerpoFisico.setLinearVelocity(0f, 0f);
+    }
+
+    /**
+    * 0 = el más cercano
+    * 1 = jugador 1
+    * 2 = jugador 2
+    */
+    private int jugadorObjetivo;
+
+    // Parámetros simples para evitar vibración / “pegarse” al jugador
+    private float distanciaMinima = 0.35f; // unidades del mundo Box2D
+
+    // tmp para no alocar
+    private final Vector2 tmpDir = new Vector2();
 }

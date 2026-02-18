@@ -20,67 +20,76 @@ import mapa.generacion.DisposicionMapa;
 import mapa.model.Habitacion;
 
 /**
- * Contenedor de TODAS las dependencias ya construidas para iniciar una partida.
- *
- * Esto permite extraer la inicialización fuera de {@code Partida} sin tener que
- * hacer setters sueltos ni exponer campos.
- */
+* Contenedor de TODAS las dependencias ya construidas para iniciar una partida.
+*
+* Esto permite extraer la inicialización fuera de {@code Partida} sin tener que
+* hacer setters sueltos ni exponer campos.
+*/
 public final class ContextoPartida {
+    public final Jugador jugador1;
 
-    // Mundo físico
-    public final World world;
+    public final ControlJugador controlJugador1;
+
+    public final ControlJugador controlJugador2;
+
+    public final ControlPuzzlePorSala controlPuzzle;
+
     public final FisicaMundo fisica;
 
-    // Render
-    public final SpriteBatch batch;
-    public final ShapeRenderer shapeRendererMundo;
+    public final GestorSalas gestorSalas;
 
-    // Mapa
-    public final TiledMap mapaTiled;
+    public final Habitacion salaActual;
+
+    public final Jugador jugador2;
+
+    public final List<Habitacion> salasDelPiso;
+
+    public final List<InicializadorSensoresPuertas.RegistroPuerta> puertas;
+
     public final OrthogonalTiledMapRenderer mapaRenderer;
+
+    public final ShapeRenderer shapeRendererMundo;
 
     // Cámara
     public final CamaraDeSala camaraSala;
 
-    // Lógico
-    public final DisposicionMapa disposicion;
-    public final Habitacion salaActual;
-    public final ControlPuzzlePorSala controlPuzzle;
-    public final List<Habitacion> salasDelPiso;
-    public final List<InicializadorSensoresPuertas.RegistroPuerta> puertas;
-
-
     // Entidades / jugadores
     public final GestorDeEntidades gestorEntidades;
-    public final GestorSalas gestorSalas;
-
-    public final Jugador jugador1;
-    public final Jugador jugador2;
-    public final ControlJugador controlJugador1;
-    public final ControlJugador controlJugador2;
 
     // HUD
     public final HudJuego hud;
 
+    // Lógico
+    public final DisposicionMapa disposicion;
+
+    // Mapa
+    public final TiledMap mapaTiled;
+
+    // Mundo físico
+    public final World world;
+
+    // Render
+    public final SpriteBatch batch;
+
     public ContextoPartida(
-        World world,
-        FisicaMundo fisica,
-        SpriteBatch batch,
-        ShapeRenderer shapeRendererMundo,
-        TiledMap mapaTiled,
-        OrthogonalTiledMapRenderer mapaRenderer,
-        CamaraDeSala camaraSala,
-        DisposicionMapa disposicion,
-        Habitacion salaActual,
-        ControlPuzzlePorSala controlPuzzle,
-        List<Habitacion> salasDelPiso, List<InicializadorSensoresPuertas.RegistroPuerta> puertas,
-        GestorDeEntidades gestorEntidades,
-        GestorSalas gestorSalas,
-        Jugador jugador1,
-        Jugador jugador2,
-        ControlJugador controlJugador1,
-        ControlJugador controlJugador2,
-        HudJuego hud
+    World world,
+    FisicaMundo fisica,
+    SpriteBatch batch,
+    ShapeRenderer shapeRendererMundo,
+    TiledMap mapaTiled,
+    OrthogonalTiledMapRenderer mapaRenderer,
+    CamaraDeSala camaraSala,
+    DisposicionMapa disposicion,
+    Habitacion salaActual,
+    ControlPuzzlePorSala controlPuzzle,
+    List<Habitacion> salasDelPiso, List<InicializadorSensoresPuertas.RegistroPuerta> puertas,
+    GestorDeEntidades gestorEntidades,
+    GestorSalas gestorSalas,
+    Jugador jugador1,
+    Jugador jugador2,
+    ControlJugador controlJugador1,
+    ControlJugador controlJugador2,
+    HudJuego hud
     ) {
         this.world = world;
         this.fisica = fisica;

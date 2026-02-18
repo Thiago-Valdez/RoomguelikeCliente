@@ -34,29 +34,18 @@ import mapa.model.*;
 import mapa.puertas.*;
 
 /**
- * Construye y deja listo el contexto inicial de una partida.
- *
- * Regla: paredes/botones desde Tiled, y el generador solo crea sensores de puertas.
- */
+* Construye y deja listo el contexto inicial de una partida.
+*
+* Regla: paredes/botones desde Tiled, y el generador solo crea sensores de puertas.
+*/
 public final class InicializadorPartida {
-
-    private InicializadorPartida() {}
-
-    public static ContextoPartida crearContextoInicial() {
-        return crearContextoInicial(1);
-    }
-
     public static ContextoPartida crearContextoInicial(int nivel) {
 
-        // =====================
         // Render
-        // =====================
         SpriteBatch batch = new SpriteBatch();
         ShapeRenderer shapeRendererMundo = new ShapeRenderer();
 
-        // =====================
         // Mapa lógico
-        // =====================
         GeneradorMapa.Configuracion cfg = new GeneradorMapa.Configuracion();
         cfg.nivel = Math.max(1, nivel);
         cfg.semilla = System.currentTimeMillis();
@@ -79,9 +68,7 @@ public final class InicializadorPartida {
         camaraSala.setFactorLerp(0f);
         camaraSala.centrarEn(salaActual);
 
-        // =====================
         // Fisica + mapa Tiled
-        // =====================
         World world = new World(new Vector2(0, 0), true);
         FisicaMundo fisica = new FisicaMundo(world);
 
@@ -91,24 +78,19 @@ public final class InicializadorPartida {
         // Paredes/botones desde Tiled
         ColisionesDesdeTiled.crearColisiones(mapaTiled, world);
 
-        // =====================
         // Puertas (sensores desde generador)
-        // =====================
         List<InicializadorSensoresPuertas.RegistroPuerta> puertas = new ArrayList<>();
 
         InicializadorSensoresPuertas.generarSensoresPuertas(
-            fisica,
-            disposicion,
-            registro -> {
-                // ESTE ES EL CALLBACK: se ejecuta por cada puerta creada
-                puertas.add(registro);
-            }
+        fisica,
+        disposicion,
+        registro -> {
+            // ESTE ES EL CALLBACK: se ejecuta por cada puerta creada
+            puertas.add(registro);
+        }
         );
 
-
-        // =====================
         // Entidades / jugadores
-        // =====================
         float baseX = salaActual.gridX * salaActual.ancho;
         float baseY = salaActual.gridY * salaActual.alto;
         float px = baseX + salaActual.ancho / 2f;
@@ -140,53 +122,52 @@ public final class InicializadorPartida {
 
         GestorSalas gestorSalas = new GestorSalas(disposicion, fisica, camaraSala, gestorEntidades);
 
-        // =====================
         // HUD
-        // =====================
         HudJuego hud = new HudJuego(disposicion, jugador1);
         hud.actualizarSalaActual(salaActual);
 
         return new ContextoPartida(
-                world,
-                fisica,
-                batch,
-                shapeRendererMundo,
-                mapaTiled,
-                mapaRenderer,
-                camaraSala,
-                disposicion,
-                salaActual,
-                controlPuzzle,
-                salasDelPiso,
-                puertas,
-                gestorEntidades,
-                gestorSalas,
-                jugador1,
-                jugador2,
-                controlJugador1,
-                controlJugador2,
-                hud
+        world,
+        fisica,
+        batch,
+        shapeRendererMundo,
+        mapaTiled,
+        mapaRenderer,
+        camaraSala,
+        disposicion,
+        salaActual,
+        controlPuzzle,
+        salasDelPiso,
+        puertas,
+        gestorEntidades,
+        gestorSalas,
+        jugador1,
+        jugador2,
+        controlJugador1,
+        controlJugador2,
+        hud
         );
     }
 
-    public static ContextoPartida crearContextoNivel(    int nivel,
-                                                         long semilla,
-                                                         Jugador jugador1Existente,
-                                                         Jugador jugador2Existente) {
+    private InicializadorPartida() {}
 
-        // =====================
+    public static ContextoPartida crearContextoInicial() {
+        return crearContextoInicial(1);
+    }
+
+    public static ContextoPartida crearContextoNivel(    int nivel,
+    long semilla,
+    Jugador jugador1Existente,
+    Jugador jugador2Existente) {
+
         // Render
-        // =====================
         SpriteBatch batch = new SpriteBatch();
         ShapeRenderer shapeRendererMundo = new ShapeRenderer();
 
-        // =====================
         // Mapa lógico
-        // =====================
         GeneradorMapa.Configuracion cfg = new GeneradorMapa.Configuracion();
         cfg.nivel = Math.max(1, nivel);
         cfg.semilla = semilla; // ✅ NO timeMillis en online
-
 
         List<Habitacion> todasLasHabitaciones = Arrays.asList(Habitacion.values());
         GrafoPuertas grafo = new GrafoPuertas(todasLasHabitaciones, new Random(cfg.semilla));
@@ -206,9 +187,7 @@ public final class InicializadorPartida {
         camaraSala.setFactorLerp(0f);
         camaraSala.centrarEn(salaActual);
 
-        // =====================
         // Fisica + mapa Tiled
-        // =====================
         World world = new World(new Vector2(0, 0), true);
         FisicaMundo fisica = new FisicaMundo(world);
 
@@ -217,32 +196,28 @@ public final class InicializadorPartida {
 
         ColisionesDesdeTiled.crearColisiones(mapaTiled, world);
 
-        // =====================
         // Puertas (sensores desde generador)
-        // =====================
         List<InicializadorSensoresPuertas.RegistroPuerta> puertas = new ArrayList<>();
 
         InicializadorSensoresPuertas.generarSensoresPuertas(
-            fisica,
-            disposicion,
-            puertas::add
+        fisica,
+        disposicion,
+        puertas::add
         );
 
-        // =====================
         // Entidades / jugadores (REUSO)
-        // =====================
         float baseX = salaActual.gridX * salaActual.ancho;
         float baseY = salaActual.gridY * salaActual.alto;
         float px = baseX + salaActual.ancho / 2f;
         float py = baseY + salaActual.alto / 2f;
 
         Jugador jugador1 = (jugador1Existente != null)
-            ? jugador1Existente
-            : new Jugador(1, "Jugador 1", Genero.MASCULINO, Estilo.CLASICO);
+        ? jugador1Existente
+        : new Jugador(1, "Jugador 1", Genero.MASCULINO, Estilo.CLASICO);
 
         Jugador jugador2 = (jugador2Existente != null)
-            ? jugador2Existente
-            : new Jugador(2, "Jugador 2", Genero.FEMENINO, Estilo.CLASICO);
+        ? jugador2Existente
+        : new Jugador(2, "Jugador 2", Genero.FEMENINO, Estilo.CLASICO);
 
         // Bodies viejos no sirven si el world cambia
         jugador1.setCuerpoFisico(null);
@@ -275,33 +250,30 @@ public final class InicializadorPartida {
         jugador1.reaplicarEfectosDeItems();
         jugador2.reaplicarEfectosDeItems();
 
-        // =====================
         // HUD
-        // =====================
         HudJuego hud = new HudJuego(disposicion, jugador1);
         hud.actualizarSalaActual(salaActual);
 
         return new ContextoPartida(
-            world,
-            fisica,
-            batch,
-            shapeRendererMundo,
-            mapaTiled,
-            mapaRenderer,
-            camaraSala,
-            disposicion,
-            salaActual,
-            controlPuzzle,
-            salasDelPiso,
-            puertas,
-            gestorEntidades,
-            gestorSalas,
-            jugador1,
-            jugador2,
-            controlJugador1,
-            controlJugador2,
-            hud
+        world,
+        fisica,
+        batch,
+        shapeRendererMundo,
+        mapaTiled,
+        mapaRenderer,
+        camaraSala,
+        disposicion,
+        salaActual,
+        controlPuzzle,
+        salasDelPiso,
+        puertas,
+        gestorEntidades,
+        gestorSalas,
+        jugador1,
+        jugador2,
+        controlJugador1,
+        controlJugador2,
+        hud
         );
     }
-
 }

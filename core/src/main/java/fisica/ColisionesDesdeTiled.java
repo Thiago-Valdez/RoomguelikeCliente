@@ -11,7 +11,6 @@ import com.badlogic.gdx.physics.box2d.*;
 import com.badlogic.gdx.utils.ShortArray;
 
 public final class ColisionesDesdeTiled {
-
     private static final String NOMBRE_CAPA = "colision";
 
     private ColisionesDesdeTiled() {}
@@ -33,16 +32,6 @@ public final class ColisionesDesdeTiled {
 
         Gdx.app.log("ColisionesDesdeTiled", "Colisiones creadas: " + creadas[0]);
     }
-
-    private static void recorrerLayers(MapLayers layers, java.util.function.Consumer<MapLayer> fn) {
-        for (MapLayer layer : layers) {
-            fn.accept(layer);
-            if (layer instanceof MapGroupLayer group) {
-                recorrerLayers(group.getLayers(), fn);
-            }
-        }
-    }
-
 
     private static int crearDesdeObjectLayer(MapLayer layer, World world) {
         int count = 0;
@@ -74,61 +63,6 @@ public final class ColisionesDesdeTiled {
         return count;
     }
 
-    /**
-     * Colisiones definidas en los tiles (Tile Collision Editor).
-     * Recorre cada celda y crea shapes usando tile.getObjects().
-     */
-    private static int crearDesdeTileCollisions(TiledMapTileLayer tileLayer, World world) {
-        int count = 0;
-
-        float tileW = tileLayer.getTileWidth();
-        float tileH = tileLayer.getTileHeight();
-
-        for (int y = 0; y < tileLayer.getHeight(); y++) {
-            for (int x = 0; x < tileLayer.getWidth(); x++) {
-                TiledMapTileLayer.Cell cell = tileLayer.getCell(x, y);
-                if (cell == null) continue;
-
-                TiledMapTile tile = cell.getTile();
-                if (tile == null) continue;
-
-                MapObjects collisionObjs = tile.getObjects();
-                if (collisionObjs == null || collisionObjs.getCount() == 0) continue;
-
-                float cellX = x * tileW;
-                float cellY = y * tileH;
-
-                for (MapObject obj : collisionObjs) {
-                    if (obj instanceof RectangleMapObject r) {
-                        Rectangle rr = new Rectangle(r.getRectangle());
-                        rr.x += cellX;
-                        rr.y += cellY;
-                        crearRect(world, rr, "tileRect");
-                        count++;
-                    } else if (obj instanceof PolygonMapObject p) {
-                        Polygon poly = new Polygon(p.getPolygon().getVertices());
-                        poly.setPosition(p.getPolygon().getX() + cellX, p.getPolygon().getY() + cellY);
-                        crearPolygon(world, poly, "tilePoly");
-                        count++;
-                    } else if (obj instanceof PolylineMapObject pl) {
-                        Polyline line = new Polyline(pl.getPolyline().getVertices());
-                        line.setPosition(pl.getPolyline().getX() + cellX, pl.getPolyline().getY() + cellY);
-                        crearPolyline(world, line, "tileLine");
-                        count++;
-                    } else if (obj instanceof EllipseMapObject e) {
-                        Ellipse el = new Ellipse(e.getEllipse());
-                        el.x += cellX;
-                        el.y += cellY;
-                        crearEllipse(world, el, "tileEllipse");
-                        count++;
-                    }
-                }
-            }
-        }
-
-        return count;
-    }
-
     private static int crearDesdeTileObject(World world, TiledMapTileMapObject tmo) {
         // En general esto lo podés tratar como rect o como el polígono del tile si existiera.
         // Si lo usás, decime cómo los definiste en Tiled y lo afinamos.
@@ -136,26 +70,31 @@ public final class ColisionesDesdeTiled {
         return 0;
     }
 
-    // ------------------ helpers Box2D ------------------
+    private static void crearEllipse(World world, Ellipse e, String name) {
+        // Si es círculo aprox, lo creamos como CircleShape.
+        float rx = e.width / 2f;
+        float ry = e.height / 2f;
 
-    private static void crearRect(World world, Rectangle rect, String name) {
-        // rect.x, rect.y (abajo-izquierda), width/height en pixeles
+        if (Math.abs(rx - ry) > 0.5f) {
+            // Elipses reales: podríamos aproximarlas, pero normalmente en colisión no hace falta.
+            Gdx.app.log("ColisionesDesdeTiled", "Ellipse no circular ignorada (aprox pendiente).");
+            return;
+        }
+
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.StaticBody;
 
-        float cx = rect.x + rect.width / 2f;
-        float cy = rect.y + rect.height / 2f;
+        float cx = e.x + rx;
+        float cy = e.y + ry;
         bd.position.set(cx, cy);
 
         Body body = world.createBody(bd);
 
-        PolygonShape shape = new PolygonShape();
-        shape.setAsBox(rect.width / 2f, rect.height / 2f);
+        CircleShape shape = new CircleShape();
+        shape.setRadius(rx);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
-        fd.friction = 0f;
-        fd.restitution = 0f;
 
         Fixture fx = body.createFixture(fd);
         fx.setUserData(name != null ? name : "colision");
@@ -230,31 +169,90 @@ public final class ColisionesDesdeTiled {
         shape.dispose();
     }
 
-    private static void crearEllipse(World world, Ellipse e, String name) {
-        // Si es círculo aprox, lo creamos como CircleShape.
-        float rx = e.width / 2f;
-        float ry = e.height / 2f;
+    private static void recorrerLayers(MapLayers layers, java.util.function.Consumer<MapLayer> fn) {
+        for (MapLayer layer : layers) {
+            fn.accept(layer);
+            if (layer instanceof MapGroupLayer group) {
+                recorrerLayers(group.getLayers(), fn);
+            }
+        }
+    }
 
-        if (Math.abs(rx - ry) > 0.5f) {
-            // Elipses reales: podríamos aproximarlas, pero normalmente en colisión no hace falta.
-            Gdx.app.log("ColisionesDesdeTiled", "Ellipse no circular ignorada (aprox pendiente).");
-            return;
+    /**
+    * Colisiones definidas en los tiles (Tile Collision Editor).
+    * Recorre cada celda y crea shapes usando tile.getObjects().
+    */
+    private static int crearDesdeTileCollisions(TiledMapTileLayer tileLayer, World world) {
+        int count = 0;
+
+        float tileW = tileLayer.getTileWidth();
+        float tileH = tileLayer.getTileHeight();
+
+        for (int y = 0; y < tileLayer.getHeight(); y++) {
+            for (int x = 0; x < tileLayer.getWidth(); x++) {
+                TiledMapTileLayer.Cell cell = tileLayer.getCell(x, y);
+                if (cell == null) continue;
+
+                TiledMapTile tile = cell.getTile();
+                if (tile == null) continue;
+
+                MapObjects collisionObjs = tile.getObjects();
+                if (collisionObjs == null || collisionObjs.getCount() == 0) continue;
+
+                float cellX = x * tileW;
+                float cellY = y * tileH;
+
+                for (MapObject obj : collisionObjs) {
+                    if (obj instanceof RectangleMapObject r) {
+                        Rectangle rr = new Rectangle(r.getRectangle());
+                        rr.x += cellX;
+                        rr.y += cellY;
+                        crearRect(world, rr, "tileRect");
+                        count++;
+                    } else if (obj instanceof PolygonMapObject p) {
+                        Polygon poly = new Polygon(p.getPolygon().getVertices());
+                        poly.setPosition(p.getPolygon().getX() + cellX, p.getPolygon().getY() + cellY);
+                        crearPolygon(world, poly, "tilePoly");
+                        count++;
+                    } else if (obj instanceof PolylineMapObject pl) {
+                        Polyline line = new Polyline(pl.getPolyline().getVertices());
+                        line.setPosition(pl.getPolyline().getX() + cellX, pl.getPolyline().getY() + cellY);
+                        crearPolyline(world, line, "tileLine");
+                        count++;
+                    } else if (obj instanceof EllipseMapObject e) {
+                        Ellipse el = new Ellipse(e.getEllipse());
+                        el.x += cellX;
+                        el.y += cellY;
+                        crearEllipse(world, el, "tileEllipse");
+                        count++;
+                    }
+                }
+            }
         }
 
+        return count;
+    }
+
+    // ------------------ helpers Box2D ------------------
+
+    private static void crearRect(World world, Rectangle rect, String name) {
+        // rect.x, rect.y (abajo-izquierda), width/height en pixeles
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.StaticBody;
 
-        float cx = e.x + rx;
-        float cy = e.y + ry;
+        float cx = rect.x + rect.width / 2f;
+        float cy = rect.y + rect.height / 2f;
         bd.position.set(cx, cy);
 
         Body body = world.createBody(bd);
 
-        CircleShape shape = new CircleShape();
-        shape.setRadius(rx);
+        PolygonShape shape = new PolygonShape();
+        shape.setAsBox(rect.width / 2f, rect.height / 2f);
 
         FixtureDef fd = new FixtureDef();
         fd.shape = shape;
+        fd.friction = 0f;
+        fd.restitution = 0f;
 
         Fixture fx = body.createFixture(fd);
         fx.setUserData(name != null ? name : "colision");

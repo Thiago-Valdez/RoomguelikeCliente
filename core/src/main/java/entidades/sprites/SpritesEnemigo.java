@@ -6,43 +6,58 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import entidades.enemigos.Enemigo;
 
 /**
- * Sprite de enemigo que:
- * - elige idle/move por delta de posición (NO por linearVelocity)
- *   porque en online el cliente aplica setTransform() y deja velocity en 0.
- * - mantiene la mirada izquierda/derecha según el movimiento real.
- */
+* Sprite de enemigo que:
+* - elige idle/move por delta de posición (NO por linearVelocity)
+*   porque en online el cliente aplica setTransform() y deja velocity en 0.
+* - mantiene la mirada izquierda/derecha según el movimiento real.
+*/
 public class SpritesEnemigo extends SpritesEntidad {
-
-    private boolean inicializadoDelta = false;
-    private float lastX, lastY;
-
-    // =====================
-    // Suavizado + anti-parpadeo (online)
-    // =====================
-    // En online los enemigos suelen actualizarse a ~20Hz y se aplican con setTransform(),
-    // lo que se ve como "teleport" y además hace que el estado idle/move parpadee.
-    // Solución:
-    // 1) Render con posición suavizada (lerp) hacia la posición real del body.
-    // 2) Linger de "movimiento" por un corto tiempo después de detectar un update.
-
-    private boolean inicializadoSuavizado = false;
-    private float renderX, renderY;
-    private float targetX, targetY;
-
-    // cuánto seguimos en anim de movimiento aunque no lleguen nuevos updates
-    private float movingHold = 0f;
     private static final float MOVING_HOLD_S = 0.18f; // ~4 frames a 60fps / 1 tick de red
 
     // smoothing factor (mayor = más pegado, menor = más suave)
     private static final float SMOOTHING = 14f;
 
-    // Umbral anti-jitter (ajustable)
-    private static final float EPS2 = 0.000001f;
+    private boolean inicializadoDelta = false;
 
-    public SpritesEnemigo(Enemigo enemigo, int frameW, int frameH) {
-        super(enemigo, frameW, frameH);
-        cargar();
-        construirAnimaciones();
+    private float lastX, lastY;
+
+    private float renderX, renderY;
+
+    private float targetX, targetY;
+
+    @Override
+    public void render(SpriteBatch batch) {
+        if (batch == null) return;
+        if (entidad == null || entidad.getCuerpoFisico() == null) return;
+
+        TextureRegion frame = elegirFrame();
+        if (frame == null) return;
+
+        // Render con posición suavizada (evita teleport visual).
+        float px;
+        float py;
+        if (inicializadoSuavizado) {
+            px = renderX;
+            py = renderY;
+        } else {
+            var pos = entidad.getCuerpoFisico().getPosition();
+            px = pos.x;
+            py = pos.y;
+        }
+
+        float w = frame.getRegionWidth();
+        float h = frame.getRegionHeight();
+
+        float baseX = px - w / 2f;
+        float y = py - anclaPie + offsetY;
+
+        float ox = ultimaMiradaDerecha ? offsetX : -offsetX;
+
+        if (ultimaMiradaDerecha) {
+            batch.draw(frame, baseX + ox, y, w, h);
+        } else {
+            batch.draw(frame, baseX + ox + w, y, -w, h);
+        }
     }
 
     @Override
@@ -97,10 +112,10 @@ public class SpritesEnemigo extends SpritesEntidad {
         }
     }
 
-    @Override
-    protected String pathQuieto() {
-        Enemigo e = (Enemigo) entidad;
-        return "Enemigos/" + e.getNombre() + "_quieto.png";
+    public SpritesEnemigo(Enemigo enemigo, int frameW, int frameH) {
+        super(enemigo, frameW, frameH);
+        cargar();
+        construirAnimaciones();
     }
 
     @Override
@@ -114,6 +129,27 @@ public class SpritesEnemigo extends SpritesEntidad {
         Enemigo e = (Enemigo) entidad;
         return "Enemigos/" + e.getNombre() + "_muerte.png";
     }
+
+    @Override
+    protected String pathQuieto() {
+        Enemigo e = (Enemigo) entidad;
+        return "Enemigos/" + e.getNombre() + "_quieto.png";
+    }
+
+    // Suavizado + anti-parpadeo (online)
+    // En online los enemigos suelen actualizarse a ~20Hz y se aplican con setTransform(),
+    // lo que se ve como "teleport" y además hace que el estado idle/move parpadee.
+    // Solución:
+    // 1) Render con posición suavizada (lerp) hacia la posición real del body.
+    // 2) Linger de "movimiento" por un corto tiempo después de detectar un update.
+
+    private boolean inicializadoSuavizado = false;
+
+    // Umbral anti-jitter (ajustable)
+    private static final float EPS2 = 0.000001f;
+
+    // cuánto seguimos en anim de movimiento aunque no lleguen nuevos updates
+    private float movingHold = 0f;
 
     // ✅ CLAVE: elegimos frame por delta de posición, no por velocidad.
     @Override
@@ -134,40 +170,5 @@ public class SpritesEnemigo extends SpritesEntidad {
 
         if (animQuieto == null) return null;
         return animQuieto.getKeyFrame(tiempoAnim, true);
-    }
-
-    @Override
-    public void render(SpriteBatch batch) {
-        if (batch == null) return;
-        if (entidad == null || entidad.getCuerpoFisico() == null) return;
-
-        TextureRegion frame = elegirFrame();
-        if (frame == null) return;
-
-        // Render con posición suavizada (evita teleport visual).
-        float px;
-        float py;
-        if (inicializadoSuavizado) {
-            px = renderX;
-            py = renderY;
-        } else {
-            var pos = entidad.getCuerpoFisico().getPosition();
-            px = pos.x;
-            py = pos.y;
-        }
-
-        float w = frame.getRegionWidth();
-        float h = frame.getRegionHeight();
-
-        float baseX = px - w / 2f;
-        float y = py - anclaPie + offsetY;
-
-        float ox = ultimaMiradaDerecha ? offsetX : -offsetX;
-
-        if (ultimaMiradaDerecha) {
-            batch.draw(frame, baseX + ox, y, w, h);
-        } else {
-            batch.draw(frame, baseX + ox + w, y, -w, h);
-        }
     }
 }

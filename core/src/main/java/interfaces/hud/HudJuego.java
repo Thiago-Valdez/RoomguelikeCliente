@@ -28,55 +28,42 @@ import mapa.minimapa.PosMini;
 import mapa.model.Habitacion;
 
 public class HudJuego implements Disposable, ListenerCambioSala {
-
     private static final float HUD_W = 960f;
-    private static final float HUD_H = 540f;
 
-    // === Paths HUD (cambiá nombres si los tuyos son distintos) ===
-    private static final String PATH_HEART_FULL  = "Hud/corazon_lleno.png";
     private static final String PATH_HEART_EMPTY = "Hud/corazon_vacio.png";
+
     private static final String PATH_SLOT        = "Hud/slot.png";
 
-    // === Items (futuro) ===
-    // Cuando diseñes sprites, ponelos en assets/Items/...
-    // Convención: "Items/<tipo>.png" o "Items/item_<tipo>.png"
-    // (ver método resolveItemIconPath)
-    private static final String PATH_ITEM_UNKNOWN = "Hud/items/item_unknown.png"; // opcional fallback
-
-    private final DisposicionMapa disposicion;
-    private Jugador jugador;
-
-    // ✅ ONLINE: el HUD es autoritativo del server. Hasta recibir snapshot mostramos placeholder.
-    private boolean sincronizando = false;
-
-    // MVP: UI del otro jugador (solo vida)
-    private int otherPlayerId = -1;
-    private int otherVida = 0;
-    private int otherVidaMax = 0;
+    private static final float HUD_H = 540f;
 
     private Habitacion salaActual;
-    private final LayoutMinimapa layout;
 
     private final OrthographicCamera cam;
-    private final Viewport viewport;
 
     private final SpriteBatch batch;
-    private final ShapeRenderer shapes;
-    private final BitmapFont font;
 
-    // === Texturas HUD ===
-    private Texture texHeartFull, texHeartEmpty, texSlot, texItemUnknown;
+    private Jugador jugador;
+
     private TextureRegion heartFull, heartEmpty, slot, itemUnknown;
 
-    // === Cache de iconos por tipo de item (carga lazy) ===
-    private final EnumMap<ItemTipo, TextureRegion> iconosPorTipo = new EnumMap<>(ItemTipo.class);
-    private final EnumMap<ItemTipo, Texture> texturasPorTipo = new EnumMap<>(ItemTipo.class);
+    private final BitmapFont font;
 
-    // Layout items
-    private int maxSlots = 6;            // ajustable
-    private float iconSize = 40f;        // tus sprites son 16x16
-    private float iconGap = 6f;
+    private final LayoutMinimapa layout;
+
+    private final ShapeRenderer shapes;
+
+    private final Viewport viewport;
+
     private float padding = 20f;
+
+    private int otherVida = 0;
+
+    private int otherVidaMax = 0;
+
+    @Override
+    public void salaCambiada(Habitacion salaAnterior, Habitacion salaNueva) {
+        actualizarSalaActual(salaNueva);
+    }
 
     public HudJuego(DisposicionMapa disposicion, Jugador jugador) {
         this.disposicion = disposicion;
@@ -96,21 +83,71 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         cargarTexturasHud();
     }
 
-    /** Permite que en ONLINE el HUD apunte al jugador local (P1 o P2). */
-    public void setJugador(Jugador jugador) {
-        if (jugador != null) this.jugador = jugador;
+    public void actualizarSalaActual(Habitacion nuevaSala) {
+        this.salaActual = nuevaSala;
     }
 
-    /** ONLINE: si true, no dibuja corazones/slots reales y muestra "Sincronizando...". */
-    public void setSincronizando(boolean sincronizando) {
-        this.sincronizando = sincronizando;
+    public void render() {
+        viewport.apply();
+        cam.update();
+
+        batch.setProjectionMatrix(cam.combined);
+        batch.begin();
+        dibujarVida();
+        dibujarItemsSlots();
+        batch.end();
+
+        shapes.setProjectionMatrix(cam.combined);
+        dibujarMinimapaExplorado();
     }
 
-    /** MVP: setea vida del otro jugador (para mostrarla en HUD). */
-    public void setOtherState(int otherPlayerId, int vida, int vidaMax) {
-        this.otherPlayerId = otherPlayerId;
-        this.otherVida = Math.max(0, vida);
-        this.otherVidaMax = Math.max(0, vidaMax);
+    public void resize(int width, int height) {
+        viewport.update(width, height, true);
+    }
+
+    public void setIconSize(float iconSize) {
+        this.iconSize = iconSize;
+    }
+
+    public void setPadding(float padding) {
+        this.padding = padding;
+    }
+
+    private TextureRegion getIconoItem(Item item) {
+        if (item == null) return itemUnknown;
+
+        ItemTipo tipo = item.getTipo();
+        if (tipo == null) return itemUnknown;
+
+        // Cache hit
+        TextureRegion cached = iconosPorTipo.get(tipo);
+        if (cached != null) return cached;
+
+        // Intentar carga lazy desde assets/Items
+        String path = resolveItemIconPath(tipo);
+        Texture tex = loadTextureSafe(path);
+
+        if (tex == null) {
+            // No existe todavía: devolvemos unknown (si existe)
+            return itemUnknown;
+        }
+
+        tex.setFilter(TextureFilter.Nearest, TextureFilter.Nearest);
+
+        TextureRegion region = new TextureRegion(tex);
+        iconosPorTipo.put(tipo, region);
+        texturasPorTipo.put(tipo, tex);
+        return region;
+    }
+
+    private static Texture loadTextureSafe(String internalPath) {
+        try {
+            if (internalPath == null || internalPath.isBlank()) return null;
+            if (!Gdx.files.internal(internalPath).exists()) return null;
+            return new Texture(Gdx.files.internal(internalPath));
+        } catch (GdxRuntimeException ex) {
+            return null;
+        }
     }
 
     private void cargarTexturasHud() {
@@ -137,105 +174,100 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         }
     }
 
-    private static Texture loadTextureSafe(String internalPath) {
-        try {
-            if (internalPath == null || internalPath.isBlank()) return null;
-            if (!Gdx.files.internal(internalPath).exists()) return null;
-            return new Texture(Gdx.files.internal(internalPath));
-        } catch (GdxRuntimeException ex) {
-            return null;
+    private void setColorSala(ShapeRenderer sr, Habitacion h, float alpha) {
+        switch (h.tipo) {
+        case INICIO -> sr.setColor(0.95f, 0.95f, 0.95f, alpha);
+        case ACERTIJO -> sr.setColor(0.35f, 0.65f, 1f, alpha);
+        case COMBATE -> sr.setColor(1f, 0.25f, 0.25f, alpha);
+        case BOTIN -> sr.setColor(1f, 1f, 0.35f, alpha);
+        case JEFE -> sr.setColor(0.85f, 0.35f, 1f, alpha);
+        default -> sr.setColor(0.6f, 0.6f, 0.6f, alpha);
         }
     }
 
-    public void actualizarSalaActual(Habitacion nuevaSala) {
-        this.salaActual = nuevaSala;
+    private final EnumMap<ItemTipo, Texture> texturasPorTipo = new EnumMap<>(ItemTipo.class);
+
+    /**
+    * Convención de paths:
+    * - Primero prueba: Items/<TIPO_EN_MINUSCULA>.png
+    * - Si no existe:  Items/item_<TIPO_EN_MINUSCULA>.png
+    *
+    * Ej: ItemTipo.VELOCIDAD -> Items/velocidad.png  (o Items/item_velocidad.png)
+    */
+    private static String resolveItemIconPath(ItemTipo tipo) {
+        String base = tipo.name().toLowerCase(); // ej: "velocidad"
+        String p1 = "Items/" + base + ".png";
+        if (Gdx.files.internal(p1).exists()) return p1;
+
+        String p2 = "Items/item_" + base + ".png";
+        if (Gdx.files.internal(p2).exists()) return p2;
+
+        // Si no existe, devolvemos p1 como "default"
+        return p1;
     }
+
+    /** MVP: setea vida del otro jugador (para mostrarla en HUD). */
+    public void setOtherState(int otherPlayerId, int vida, int vidaMax) {
+        this.otherPlayerId = otherPlayerId;
+        this.otherVida = Math.max(0, vida);
+        this.otherVidaMax = Math.max(0, vidaMax);
+    }
+
+    /** ONLINE: si true, no dibuja corazones/slots reales y muestra "Sincronizando...". */
+    public void setSincronizando(boolean sincronizando) {
+        this.sincronizando = sincronizando;
+    }
+
+    /** Permite que en ONLINE el HUD apunte al jugador local (P1 o P2). */
+    public void setJugador(Jugador jugador) {
+        if (jugador != null) this.jugador = jugador;
+    }
+
+    // === Cache de iconos por tipo de item (carga lazy) ===
+    private final EnumMap<ItemTipo, TextureRegion> iconosPorTipo = new EnumMap<>(ItemTipo.class);
+
+    // === Items (futuro) ===
+    // Cuando diseñes sprites, ponelos en assets/Items/...
+    // Convención: "Items/<tipo>.png" o "Items/item_<tipo>.png"
+    // (ver método resolveItemIconPath)
+    private static final String PATH_ITEM_UNKNOWN = "Hud/items/item_unknown.png"; // opcional fallback
+
+    private final DisposicionMapa disposicion;
+
+    // === Paths HUD (cambiá nombres si los tuyos son distintos) ===
+    private static final String PATH_HEART_FULL  = "Hud/corazon_lleno.png";
+
+    // === Texturas HUD ===
+    private Texture texHeartFull, texHeartEmpty, texSlot, texItemUnknown;
+
+    // Config opcional
+
+    public void setMaxSlots(int maxSlots) {
+        this.maxSlots = Math.max(0, maxSlots);
+    }
+
+    // Dispose
 
     @Override
-    public void salaCambiada(Habitacion salaAnterior, Habitacion salaNueva) {
-        actualizarSalaActual(salaNueva);
+    public void dispose() {
+        batch.dispose();
+        shapes.dispose();
+        font.dispose();
+
+        if (texHeartFull != null) texHeartFull.dispose();
+        if (texHeartEmpty != null) texHeartEmpty.dispose();
+        if (texSlot != null) texSlot.dispose();
+        if (texItemUnknown != null) texItemUnknown.dispose();
+
+        for (Map.Entry<ItemTipo, Texture> e : texturasPorTipo.entrySet()) {
+            Texture t = e.getValue();
+            if (t != null) t.dispose();
+        }
+        texturasPorTipo.clear();
+        iconosPorTipo.clear();
     }
 
-    public void resize(int width, int height) {
-        viewport.update(width, height, true);
-    }
-
-    public void render() {
-        viewport.apply();
-        cam.update();
-
-        batch.setProjectionMatrix(cam.combined);
-        batch.begin();
-        dibujarVida();
-        dibujarItemsSlots();
-        batch.end();
-
-        shapes.setProjectionMatrix(cam.combined);
-        dibujarMinimapaExplorado();
-    }
-
-    // ============================================================
-    // VIDA (corazones 16x16)
-    // ============================================================
-
-    private void dibujarVida() {
-        if (sincronizando) {
-            float x = padding;
-            float yTop = HUD_H - padding;
-            font.draw(batch, "Sincronizando HUD...", x, yTop);
-            return;
-        }
-        int vidaActual = jugador.getVida();
-        int vidaMax = jugador.getVidaMaxima();
-
-        float x = padding;
-        float yTop = HUD_H - padding;
-        float y = yTop - iconSize;
-
-        if (heartFull != null && heartEmpty != null) {
-            for (int i = 0; i < vidaMax; i++) {
-                TextureRegion tr = (i < vidaActual) ? heartFull : heartEmpty;
-                batch.draw(tr, x + i * (iconSize + 4f), y, iconSize, iconSize);
-            }
-        } else {
-            // Fallback texto (por si faltan assets)
-            StringBuilder sb = new StringBuilder("Vida: ");
-            for (int i = 0; i < vidaMax; i++) sb.append(i < vidaActual ? "♥" : "♡");
-            font.draw(batch, sb.toString(), x, yTop);
-        }
-
-        // =====================
-        // VIDA del otro jugador (corazones)
-        // =====================
-        if (otherPlayerId > 0 && otherVidaMax > 0) {
-            float yTop2 = yTop;
-            float y2 = yTop2 - iconSize;
-
-            // Título (J2 / J1) arriba-derecha
-            String nombre = "J" + otherPlayerId;
-            float titleX = HUD_W - padding - 40f;
-            font.draw(batch, nombre, titleX, yTop2);
-
-            // Corazones alineados a la derecha
-            float totalW = otherVidaMax * iconSize + (otherVidaMax - 1) * 4f;
-            float startX = HUD_W - padding - totalW;
-
-            if (heartFull != null && heartEmpty != null) {
-                for (int i = 0; i < otherVidaMax; i++) {
-                    TextureRegion tr = (i < otherVida) ? heartFull : heartEmpty;
-                    batch.draw(tr, startX + i * (iconSize + 4f), y2, iconSize, iconSize);
-                }
-            } else {
-                // Fallback texto si faltan assets
-                String txtVida = nombre + ": " + otherVida + "/" + otherVidaMax;
-                font.draw(batch, txtVida, HUD_W - padding - 140f, yTop2);
-            }
-        }
-}
-
-    // ============================================================
     // ITEMS (slots + iconos por ItemTipo, carga lazy desde assets/Items)
-    // ============================================================
 
     private void dibujarItemsSlots() {
         if (sincronizando) {
@@ -303,56 +335,12 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         }
     }
 
+    // Layout items
+    private int maxSlots = 6;            // ajustable
+    private float iconSize = 40f;        // tus sprites son 16x16
+    private float iconGap = 6f;
 
-    private TextureRegion getIconoItem(Item item) {
-        if (item == null) return itemUnknown;
-
-        ItemTipo tipo = item.getTipo();
-        if (tipo == null) return itemUnknown;
-
-        // Cache hit
-        TextureRegion cached = iconosPorTipo.get(tipo);
-        if (cached != null) return cached;
-
-        // Intentar carga lazy desde assets/Items
-        String path = resolveItemIconPath(tipo);
-        Texture tex = loadTextureSafe(path);
-
-        if (tex == null) {
-            // No existe todavía: devolvemos unknown (si existe)
-            return itemUnknown;
-        }
-
-        tex.setFilter(TextureFilter.Nearest, TextureFilter.Nearest);
-
-        TextureRegion region = new TextureRegion(tex);
-        iconosPorTipo.put(tipo, region);
-        texturasPorTipo.put(tipo, tex);
-        return region;
-    }
-
-    /**
-     * Convención de paths:
-     * - Primero prueba: Items/<TIPO_EN_MINUSCULA>.png
-     * - Si no existe:  Items/item_<TIPO_EN_MINUSCULA>.png
-     *
-     * Ej: ItemTipo.VELOCIDAD -> Items/velocidad.png  (o Items/item_velocidad.png)
-     */
-    private static String resolveItemIconPath(ItemTipo tipo) {
-        String base = tipo.name().toLowerCase(); // ej: "velocidad"
-        String p1 = "Items/" + base + ".png";
-        if (Gdx.files.internal(p1).exists()) return p1;
-
-        String p2 = "Items/item_" + base + ".png";
-        if (Gdx.files.internal(p2).exists()) return p2;
-
-        // Si no existe, devolvemos p1 como "default"
-        return p1;
-    }
-
-    // ============================================================
     // MINIMAPA (igual que antes, pero en HUD virtual)
-    // ============================================================
 
     private void dibujarMinimapaExplorado() {
         Set<Habitacion> descubiertas = disposicion.getDescubiertas();
@@ -447,53 +435,64 @@ public class HudJuego implements Disposable, ListenerCambioSala {
         batch.end();
     }
 
-    private void setColorSala(ShapeRenderer sr, Habitacion h, float alpha) {
-        switch (h.tipo) {
-            case INICIO -> sr.setColor(0.95f, 0.95f, 0.95f, alpha);
-            case ACERTIJO -> sr.setColor(0.35f, 0.65f, 1f, alpha);
-            case COMBATE -> sr.setColor(1f, 0.25f, 0.25f, alpha);
-            case BOTIN -> sr.setColor(1f, 1f, 0.35f, alpha);
-            case JEFE -> sr.setColor(0.85f, 0.35f, 1f, alpha);
-            default -> sr.setColor(0.6f, 0.6f, 0.6f, alpha);
+    // MVP: UI del otro jugador (solo vida)
+    private int otherPlayerId = -1;
+
+    // VIDA (corazones 16x16)
+
+    private void dibujarVida() {
+        if (sincronizando) {
+            float x = padding;
+            float yTop = HUD_H - padding;
+            font.draw(batch, "Sincronizando HUD...", x, yTop);
+            return;
+        }
+        int vidaActual = jugador.getVida();
+        int vidaMax = jugador.getVidaMaxima();
+
+        float x = padding;
+        float yTop = HUD_H - padding;
+        float y = yTop - iconSize;
+
+        if (heartFull != null && heartEmpty != null) {
+            for (int i = 0; i < vidaMax; i++) {
+                TextureRegion tr = (i < vidaActual) ? heartFull : heartEmpty;
+                batch.draw(tr, x + i * (iconSize + 4f), y, iconSize, iconSize);
+            }
+        } else {
+            // Fallback texto (por si faltan assets)
+            StringBuilder sb = new StringBuilder("Vida: ");
+            for (int i = 0; i < vidaMax; i++) sb.append(i < vidaActual ? "♥" : "♡");
+            font.draw(batch, sb.toString(), x, yTop);
+        }
+
+        // VIDA del otro jugador (corazones)
+        if (otherPlayerId > 0 && otherVidaMax > 0) {
+            float yTop2 = yTop;
+            float y2 = yTop2 - iconSize;
+
+            // Título (J2 / J1) arriba-derecha
+            String nombre = "J" + otherPlayerId;
+            float titleX = HUD_W - padding - 40f;
+            font.draw(batch, nombre, titleX, yTop2);
+
+            // Corazones alineados a la derecha
+            float totalW = otherVidaMax * iconSize + (otherVidaMax - 1) * 4f;
+            float startX = HUD_W - padding - totalW;
+
+            if (heartFull != null && heartEmpty != null) {
+                for (int i = 0; i < otherVidaMax; i++) {
+                    TextureRegion tr = (i < otherVida) ? heartFull : heartEmpty;
+                    batch.draw(tr, startX + i * (iconSize + 4f), y2, iconSize, iconSize);
+                }
+            } else {
+                // Fallback texto si faltan assets
+                String txtVida = nombre + ": " + otherVida + "/" + otherVidaMax;
+                font.draw(batch, txtVida, HUD_W - padding - 140f, yTop2);
+            }
         }
     }
 
-    // ============================================================
-    // Config opcional
-    // ============================================================
-
-    public void setMaxSlots(int maxSlots) {
-        this.maxSlots = Math.max(0, maxSlots);
-    }
-
-    public void setIconSize(float iconSize) {
-        this.iconSize = iconSize;
-    }
-
-    public void setPadding(float padding) {
-        this.padding = padding;
-    }
-
-    // ============================================================
-    // Dispose
-    // ============================================================
-
-    @Override
-    public void dispose() {
-        batch.dispose();
-        shapes.dispose();
-        font.dispose();
-
-        if (texHeartFull != null) texHeartFull.dispose();
-        if (texHeartEmpty != null) texHeartEmpty.dispose();
-        if (texSlot != null) texSlot.dispose();
-        if (texItemUnknown != null) texItemUnknown.dispose();
-
-        for (Map.Entry<ItemTipo, Texture> e : texturasPorTipo.entrySet()) {
-            Texture t = e.getValue();
-            if (t != null) t.dispose();
-        }
-        texturasPorTipo.clear();
-        iconosPorTipo.clear();
-    }
+    // ✅ ONLINE: el HUD es autoritativo del server. Hasta recibir snapshot mostramos placeholder.
+    private boolean sincronizando = false;
 }

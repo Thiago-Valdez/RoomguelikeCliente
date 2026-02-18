@@ -17,256 +17,171 @@ import entidades.personajes.Jugador;
 import mapa.model.Habitacion;
 
 public class RedPartidaCliente implements GameController {
-
     private static final String TAG = "NET";
-    private static final boolean TELEPORT_ALWAYS_ONLINE = true; // (lo dejé por compat aunque hoy no lo uses)
 
-    private ClientThread client;
+    private volatile int otherPlayerId = -1;
 
-    // Apariencia que el jugador eligió en el menú (para aplicar localmente al conectarse)
-    private String miGeneroDeseado = "MASCULINO";
     private String miEstiloDeseado = "CLASICO";
 
-    // ===== Estado online =====
-    private boolean modoOnline = false;
     private boolean onlineArrancado = false;
+
     private int miPlayerId = -1;
 
-    // ===== Start/seed/nivel =====
-    private volatile boolean startRecibido = false;
-    private volatile long seedServidor = 0L;
-    private volatile int nivelServidor = 1;
     private volatile boolean mundoListo = false;
 
-    // Apariencia recibida del servidor (playerId -> [genero, estilo])
-    private final Map<Integer, String[]> aparienciaPorJugador = new HashMap<>();
-    private final Map<Integer, Boolean> aparienciaAplicada = new HashMap<>();
-
-    // ===== Sala pendiente =====
-    private volatile String salaPendiente = null;
-
-    // ===== Disconnect =====
-    private volatile String motivoDisconnect = null;
-
-    // ===== GameOver (server-driven) =====
-    private volatile boolean gameOverRecibido = false;
     private volatile int loserId = -1;
 
-    // ===== Snapshots para interpolación (cliente visual) =====
-    private static final int MAX_SAMPLES_PER_PLAYER = 10;
-    private static final long INTERP_DELAY_MS = 100; // delay visual para interpolar (buffer)
+    private volatile int nivelServidor = 1;
 
-    private static final class Sample {
-        final float x;
-        final float y;
-        final long tMs;
+    private volatile int otherVida = 0;
 
-        Sample(float x, float y, long tMs) {
-            this.x = x;
-            this.y = y;
-            this.tMs = tMs;
+    private volatile int otherVidaMax = 0;
+
+    private volatile long seedServidor = 0L;
+
+    @Override
+    public void appearance(int playerId, String genero, String estilo) {
+        if (playerId <= 0) return;
+        if (genero == null) genero = "MASCULINO";
+        if (estilo == null) estilo = "CLASICO";
+        aparienciaPorJugador.put(playerId, new String[]{genero, estilo});
+        aparienciaAplicada.put(playerId, false);
+        System.out.println("[NET] Appearance recv id=" + playerId + " " + genero + " " + estilo);
+    }
+
+    @Override
+    public void dead(int playerId) {
+        // MVP: hoy solo es informativo. El HUD ya reflejará vida=0.
+    }
+
+    @Override
+    public void despawnEnemy(int enemyId) {
+        if (!modoOnline) return;
+        synchronized (lockEnemies) {
+            despawnEnemiesPendientes.addLast(enemyId);
+            while (despawnEnemiesPendientes.size() > 50) despawnEnemiesPendientes.pollFirst();
         }
     }
 
-    // playerId -> cola de samples (ordenados por llegada)
-    private final Map<Integer, Deque<Sample>> samplesPorJugador = new HashMap<>();
-
-    // ===== Ventanas anti-glitch =====
-    private volatile int ignorarPosFrames = 0; // (lo dejé, aunque hoy no lo uses)
-    private volatile int teleportFrames = 0;
-
-    // =====================
-    // Items (server-driven)
-    // =====================
-    private static final class SpawnItemEv {
-        final int itemId;
-        final String tipo;
-        final float x;
-        final float y;
-        SpawnItemEv(int itemId, String tipo, float x, float y) {
-            this.itemId = itemId;
-            this.tipo = tipo;
-            this.x = x;
-            this.y = y;
+    @Override
+    public void despawnItem(int itemId) {
+        if (!modoOnline) return;
+        synchronized (lockItems) {
+            despawnItemsPendientes.addLast(itemId);
         }
     }
 
-    private final Object lockItems = new Object();
-    private final ArrayDeque<SpawnItemEv> spawnItemsPendientes = new ArrayDeque<>();
-    private final ArrayDeque<Integer> despawnItemsPendientes = new ArrayDeque<>();
+    @Override
+    public void disconnect(String reason) {
+        motivoDisconnect = reason;
+    }
 
-    // =====================
-    // Enemigos (server-driven)
-    // =====================
-    private static final class SpawnEnemyEv {
-        final int enemyId;
-        final String nombre;
-        final float x;
-        final float y;
-        final String sala;
-        SpawnEnemyEv(int enemyId, String nombre, float x, float y, String sala) {
-            this.enemyId = enemyId;
-            this.nombre = nombre;
-            this.x = x;
-            this.y = y;
-            this.sala = sala;
+    @Override
+    public void gameOver(int loserId) {
+        if (!modoOnline) return;
+        this.loserId = loserId;
+        this.gameOverRecibido = true;
+
+        // cortamos input local cuanto antes
+        ControlJugador.setPausa(true);
+        Gdx.app.log(TAG, "GAME OVER recibido. loserId=" + loserId);
+    }
+
+    @Override
+    public void hud(int playerId, int vida, int vidaMax, String tiposCsv) {
+        if (!modoOnline) return;
+        synchronized (lockHud) {
+            hudPendiente.addLast(new HudEv(playerId, vida, vidaMax, tiposCsv));
+            // Mantener cola acotada
+            while (hudPendiente.size() > 20) hudPendiente.pollFirst();
         }
     }
 
-    private static final class UpdateEnemyEv {
-        final int enemyId;
-        final float x;
-        final float y;
-        UpdateEnemyEv(int enemyId, float x, float y) {
-            this.enemyId = enemyId;
-            this.x = x;
-            this.y = y;
+    @Override
+    public void other(int otherPlayerId, int vida, int vidaMax) {
+        if (!modoOnline) return;
+        synchronized (lockOther) {
+            otherPendiente.addLast(new OtherEv(otherPlayerId, vida, vidaMax));
+            while (otherPendiente.size() > 10) otherPendiente.pollFirst();
         }
     }
 
-    private final Object lockEnemies = new Object();
-    private final ArrayDeque<SpawnEnemyEv> spawnEnemiesPendientes = new ArrayDeque<>();
-    private final ArrayDeque<UpdateEnemyEv> updateEnemiesPendientes = new ArrayDeque<>();
-    private final ArrayDeque<Integer> despawnEnemiesPendientes = new ArrayDeque<>();
+    @Override
+    public void pickupItem(int jugadorId, int itemId, String tipo) {
+        // Por ahora: el pickup solo implica despawn visual.
+        // En el próximo paso vamos a sincronizar inventario/stats/HUD.
+        despawnItem(itemId);
+    }
 
-    // =====================
-    // HUD / Inventario (server-driven)
-    // =====================
+    @Override
+    public void start(long seed, int nivel) {
+        // ✅ TRANSICIÓN DE NIVEL: mientras el hilo render recrea World, no aplicar Box2D ni samples
+        this.mundoListo = false;
 
-    // ✅ En ONLINE el HUD es autoritativo del server.
-    // Hasta recibir el primer snapshot Hud del server, el HUD debe mostrarse como "sin sincronizar".
-    private volatile boolean hudSincronizado = false;
+        this.seedServidor = seed;
+        this.nivelServidor = nivel;
 
-    private static final class HudEv {
-        final int playerId;
-        final int vida;
-        final int vidaMax;
-        final String tiposCsv;
+        synchronized (samplesPorJugador) {
+            samplesPorJugador.clear();
+        }
+        salaPendiente = null;
 
-        HudEv(int playerId, int vida, int vidaMax, String tiposCsv) {
-            this.playerId = playerId;
-            this.vida = vida;
-            this.vidaMax = vidaMax;
-            this.tiposCsv = (tiposCsv != null) ? tiposCsv : "";
+        // ✅ nuevo nivel => HUD debe re-sincronizarse por snapshot del server
+        hudSincronizado = false;
+
+        this.startRecibido = true;
+        this.onlineArrancado = true;
+
+        // input local pausado en online
+        ControlJugador.setPausa(true);
+
+        ignorarPosFrames = 0;
+        teleportFrames = 2;
+
+        Gdx.app.log(TAG, "Start recibido seed=" + seed + " nivel=" + nivel);
+    }
+
+    @Override
+    public void updateEnemy(int enemyId, float x, float y) {
+        if (!modoOnline) return;
+        synchronized (lockEnemies) {
+            updateEnemiesPendientes.addLast(new UpdateEnemyEv(enemyId, x, y));
+            while (updateEnemiesPendientes.size() > 200) updateEnemiesPendientes.pollFirst();
         }
     }
 
-    private final Object lockHud = new Object();
-    private final ArrayDeque<HudEv> hudPendiente = new ArrayDeque<>();
+    @Override
+    public void updatePlayerPosition(int playerId, float x, float y) {
+        if (!modoOnline) return;
+        if (!mundoListo) return; // durante transición de nivel, ignoramos posiciones para evitar crash nativo
+
+        final long nowMs = System.currentTimeMillis();
+        synchronized (samplesPorJugador) {
+            Deque<Sample> q = samplesPorJugador.computeIfAbsent(playerId, k -> new ArrayDeque<>());
+            // Asegura orden no-decreciente por si el reloj cambiara levemente
+            if (!q.isEmpty() && nowMs < q.peekLast().tMs) {
+                q.addLast(new Sample(x, y, q.peekLast().tMs));
+            } else {
+                q.addLast(new Sample(x, y, nowMs));
+            }
+            while (q.size() > MAX_SAMPLES_PER_PLAYER) q.pollFirst();
+        }
+    }
+
+    @Override
+    public void updateRoom(String habitacionId) {
+        salaPendiente = habitacionId;
+        teleportFrames = 2;
+    }
 
     public boolean isHudSincronizado() {
         return hudSincronizado;
     }
 
-    /** Resetea el estado de HUD (por ejemplo al recibir Start / cambio de nivel). */
-    public void resetHudSincronizado() {
-        hudSincronizado = false;
-    }
-
-    // =====================
-    // MVP: UI del otro jugador (solo vida)
-    // =====================
-    private static final class OtherEv {
-        final int otherId;
-        final int vida;
-        final int vidaMax;
-
-        OtherEv(int otherId, int vida, int vidaMax) {
-            this.otherId = otherId;
-            this.vida = vida;
-            this.vidaMax = vidaMax;
-        }
-    }
-
-    private final Object lockOther = new Object();
-    private final ArrayDeque<OtherEv> otherPendiente = new ArrayDeque<>();
-
-    private volatile int otherPlayerId = -1;
-    private volatile int otherVida = 0;
-    private volatile int otherVidaMax = 0;
-
-    // =====================
-    // Config / lifecycle
-    // =====================
-
-    public void setClient(ClientThread client) {
-        this.client = client;
-        this.modoOnline = (client != null);
-
-        if (!modoOnline) limpiarEstadoOnline();
-    }
-
-    
-
-    public void setMiAparienciaDeseada(String genero, String estilo) {
-        if (genero != null && !genero.isBlank()) this.miGeneroDeseado = genero;
-        if (estilo != null && !estilo.isBlank()) this.miEstiloDeseado = estilo;
-    }
-public void setModoOnline(boolean online) {
-        this.modoOnline = online;
-        if (!online) limpiarEstadoOnline();
-    }
-
-    public void setMundoListo(boolean listo) {
-        this.mundoListo = listo;
-    }
-
-    private void limpiarEstadoOnline() {
-        ControlJugador.setPausa(false);
-
-        onlineArrancado = false;
-        miPlayerId = -1;
-
-        startRecibido = false;
-        seedServidor = 0L;
-        nivelServidor = 1;
-
-        synchronized (samplesPorJugador) {
-            samplesPorJugador.clear();
-        }
-
-        salaPendiente = null;
-
-        hudSincronizado = false;
-
-        hudSincronizado = false;
-        motivoDisconnect = null;
+    public int consumirGameOverLoserId() {
+        if (!gameOverRecibido) return -1;
         gameOverRecibido = false;
-        loserId = -1;
-
-        ignorarPosFrames = 0;
-        teleportFrames = 0;
-
-        synchronized (lockItems) {
-            spawnItemsPendientes.clear();
-            despawnItemsPendientes.clear();
-        }
-
-        synchronized (lockEnemies) {
-            spawnEnemiesPendientes.clear();
-            updateEnemiesPendientes.clear();
-            despawnEnemiesPendientes.clear();
-        }
-
-        synchronized (lockHud) {
-            hudPendiente.clear();
-        }
-
-        synchronized (lockOther) {
-            otherPendiente.clear();
-        }
-
-        otherPlayerId = -1;
-        otherVida = 0;
-        otherVidaMax = 0;
-    }
-
-    // =====================
-    // Getters / consume
-    // =====================
-
-    public boolean isModoOnline() {
-        return modoOnline;
+        return loserId;
     }
 
     public long getSeedServidor() { return seedServidor; }
@@ -284,94 +199,32 @@ public void setModoOnline(boolean online) {
         return true;
     }
 
-    /** Devuelve el cambio de sala pendiente (si lo hay) y lo limpia. */
-    public String consumirCambioSala() {
-        if (salaPendiente == null) return null;
-        String s = salaPendiente;
-        salaPendiente = null;
-        return s;
+    public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
+        if (!modoOnline || !mundoListo || gestorEntidades == null) return;
+
+        synchronized (lockEnemies) {
+            while (!spawnEnemiesPendientes.isEmpty()) {
+                SpawnEnemyEv ev = spawnEnemiesPendientes.pollFirst();
+                if (ev == null) continue;
+
+                Habitacion sala = null;
+                try { sala = Habitacion.valueOf(ev.sala); } catch (Exception ignored) {}
+                gestorEntidades.spawnEnemyOnline(ev.enemyId, ev.nombre, sala, ev.x, ev.y);
+            }
+
+            while (!updateEnemiesPendientes.isEmpty()) {
+                UpdateEnemyEv ev = updateEnemiesPendientes.pollFirst();
+                if (ev == null) continue;
+                gestorEntidades.updateEnemyOnline(ev.enemyId, ev.x, ev.y);
+            }
+
+            while (!despawnEnemiesPendientes.isEmpty()) {
+                Integer id = despawnEnemiesPendientes.pollFirst();
+                if (id == null) continue;
+                gestorEntidades.despawnEnemyOnline(id);
+            }
+        }
     }
-
-    public int consumirGameOverLoserId() {
-        if (!gameOverRecibido) return -1;
-        gameOverRecibido = false;
-        return loserId;
-    }
-
-    // =====================
-    // Envíos al server
-    // =====================
-
-
-public void enviarRoomClearReq(mapa.model.Habitacion sala) {
-    if (!modoOnline || !onlineArrancado || client == null || sala == null) return;
-    client.sendMessage("RoomClearReq:" + sala.name());
-}
-
-public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicitado) {
-        if (!modoOnline || !onlineArrancado || client == null) return;
-        if (opcionesAbiertas || gameOverSolicitado) return;
-
-        int dx = 0, dy = 0;
-
-        if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
-        if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
-
-        client.sendMessage("Move:" + dx + ":" + dy);
-    }
-
-    public void enviarNextLevelRequest() {
-        // Fallback: si el cliente cree que tocó la trampilla, le pide al server el cambio de nivel.
-        // El server valida si corresponde (autoridad).
-        if (!modoOnline || !onlineArrancado || client == null) return;
-        client.sendMessage("NextLevelReq");
-    }
-
-
-    // ✅ Mantengo compat: con playerId o sin playerId (server acepta ambos)
-    public void enviarPuertaOnline(String origen, String destino, String dir) {
-        if (!modoOnline || !onlineArrancado || client == null) return;
-
-        final String msg;
-        if (miPlayerId > 0) msg = "Door:" + miPlayerId + ":" + origen + ":" + destino + ":" + dir;
-        else msg = "Door:" + origen + ":" + destino + ":" + dir;
-
-        Gdx.app.log(TAG, ">> " + msg);
-        client.sendMessage(msg);
-    }
-
-    // =====================
-    // Aplicación de updates
-    // =====================
-
-    
-
-private void aplicarAparienciasSiHaceFalta(Jugador jugador1, Jugador jugador2) {
-    if (jugador1 != null) aplicarAparienciaSiHaceFalta(jugador1);
-    if (jugador2 != null) aplicarAparienciaSiHaceFalta(jugador2);
-}
-
-private void aplicarAparienciaSiHaceFalta(Jugador j) {
-    int id = j.getId();
-    String[] ap = aparienciaPorJugador.get(id);
-    if (ap == null) return;
-
-    Boolean ok = aparienciaAplicada.get(id);
-    if (ok != null && ok) return;
-
-    try {
-        entidades.datos.Genero g = entidades.datos.Genero.valueOf(ap[0]);
-        entidades.datos.Estilo e = entidades.datos.Estilo.valueOf(ap[1]);
-        j.setGenero(g);
-        j.setEstilo(e);
-    } catch (Exception ignored) {
-        // si viene algo raro, ignorar
-    } finally {
-        aparienciaAplicada.put(id, true);
-    }
-}
 
     public void aplicarUpdatesPendientes(Jugador jugador1, Jugador jugador2) {
         if (!modoOnline || !mundoListo) return;
@@ -402,83 +255,87 @@ private void aplicarAparienciaSiHaceFalta(Jugador j) {
         aplicarInterpoladoParaJugador(2, jugador2, renderTimeMs, snap);
     }
 
-    /**
-     * Aplica eventos de items recibidos por red sobre el GestorDeEntidades.
-     * En online el cliente NO decide pickups: solo spawnea/despawnea lo que diga el server.
-     */
-    public void aplicarEventosItems(GestorDeEntidades gestorEntidades) {
-        if (!modoOnline || !mundoListo || gestorEntidades == null) return;
+    public void damage(int playerId, int vida, int vidaMax) {
+        if (!modoOnline) return;
 
-        synchronized (lockItems) {
-            while (!spawnItemsPendientes.isEmpty()) {
-                SpawnItemEv ev = spawnItemsPendientes.pollFirst();
-                if (ev == null) continue;
-
-                ItemTipo tipo = null;
-                try { tipo = ItemTipo.valueOf(ev.tipo); } catch (Exception ignored) {}
-                if (tipo == null) continue;
-
-                gestorEntidades.spawnItemOnline(ev.itemId, tipo, ev.x, ev.y);
-            }
-
-            while (!despawnItemsPendientes.isEmpty()) {
-                Integer id = despawnItemsPendientes.pollFirst();
-                if (id == null) continue;
-                gestorEntidades.despawnItemOnline(id);
-            }
+        // Reutilizamos las colas existentes:
+        // - Si es mi jugador => va a Hud (porque ese HUD se renderiza)
+        // - Si es el otro => va a Other (porque se muestra como UI secundaria)
+        if (miPlayerId > 0 && playerId == miPlayerId) {
+            hud(playerId, vida, vidaMax, "");
+        } else {
+            other(playerId, vida, vidaMax);
         }
     }
 
-    /**
-     * Aplica eventos de enemigos recibidos por red.
-     * En online el cliente NO simula IA: solo crea/actualiza los enemigos que manda el server.
-     */
+    public void enviarInputOnline(boolean opcionesAbiertas, boolean gameOverSolicitado) {
+        if (!modoOnline || !onlineArrancado || client == null) return;
+        if (opcionesAbiertas || gameOverSolicitado) return;
 
-public void aplicarRoomClearPendiente(control.puzzle.ControlPuzzlePorSala controlPuzzle,
-                                     juego.sistemas.SistemaSpritesEntidades sprites,
-                                     mapa.model.Habitacion salaActual) {
-    if (!modoOnline) return;
-    RoomClearEv ev = null;
-    synchronized (lockRoomClear) {
-        if (!roomClearPendientes.isEmpty()) ev = roomClearPendientes.pollFirst();
+        int dx = 0, dy = 0;
+
+        if (Gdx.input.isKeyPressed(Input.Keys.W)) dy += 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.S)) dy -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.A)) dx -= 1;
+        if (Gdx.input.isKeyPressed(Input.Keys.D)) dx += 1;
+
+        client.sendMessage("Move:" + dx + ":" + dy);
     }
-    if (ev == null) return;
 
-    mapa.model.Habitacion sala = null;
-    try { sala = mapa.model.Habitacion.valueOf(ev.sala); } catch (Exception ignored) {}
-    if (sala == null) return;
+    public void enviarNextLevelRequest() {
+        // Fallback: si el cliente cree que tocó la trampilla, le pide al server el cambio de nivel.
+        // El server valida si corresponde (autoridad).
+        if (!modoOnline || !onlineArrancado || client == null) return;
+        client.sendMessage("NextLevelReq");
+    }
 
-    // ✅ Marca resuelta (desbloquea puertas visuales y persiste estado)
-    if (controlPuzzle != null) controlPuzzle.marcarResuelta(sala);
+    public void onCambioSalaAplicado() {
+        // Limpiamos buffer para no interpolar entre salas distintas
+        synchronized (samplesPorJugador) {
+            samplesPorJugador.clear();
+        }
+        teleportFrames = 2;
+    }
 
-    // ✅ Mata enemigos visuales de esa sala (anim) si existe sprites
-    if (sprites != null) sprites.matarEnemigosDeSalaConAnim(sala);
-}
+    public void setMiAparienciaDeseada(String genero, String estilo) {
+        if (genero != null && !genero.isBlank()) this.miGeneroDeseado = genero;
+        if (estilo != null && !estilo.isBlank()) this.miEstiloDeseado = estilo;
+    }
 
-public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
-        if (!modoOnline || !mundoListo || gestorEntidades == null) return;
+    public void setMundoListo(boolean listo) {
+        this.mundoListo = listo;
+    }
 
-        synchronized (lockEnemies) {
-            while (!spawnEnemiesPendientes.isEmpty()) {
-                SpawnEnemyEv ev = spawnEnemiesPendientes.pollFirst();
-                if (ev == null) continue;
+    public void setModoOnline(boolean online) {
+        this.modoOnline = online;
+        if (!online) limpiarEstadoOnline();
+    }
 
-                Habitacion sala = null;
-                try { sala = Habitacion.valueOf(ev.sala); } catch (Exception ignored) {}
-                gestorEntidades.spawnEnemyOnline(ev.enemyId, ev.nombre, sala, ev.x, ev.y);
-            }
+    private final Object lockEnemies = new Object();
 
-            while (!updateEnemiesPendientes.isEmpty()) {
-                UpdateEnemyEv ev = updateEnemiesPendientes.pollFirst();
-                if (ev == null) continue;
-                gestorEntidades.updateEnemyOnline(ev.enemyId, ev.x, ev.y);
-            }
+    private final Object lockHud = new Object();
 
-            while (!despawnEnemiesPendientes.isEmpty()) {
-                Integer id = despawnEnemiesPendientes.pollFirst();
-                if (id == null) continue;
-                gestorEntidades.despawnEnemyOnline(id);
-            }
+    private final Object lockItems = new Object();
+
+    private final Object lockOther = new Object();
+
+    private void aplicarAparienciaSiHaceFalta(Jugador j) {
+        int id = j.getId();
+        String[] ap = aparienciaPorJugador.get(id);
+        if (ap == null) return;
+
+        Boolean ok = aparienciaAplicada.get(id);
+        if (ok != null && ok) return;
+
+        try {
+            entidades.datos.Genero g = entidades.datos.Genero.valueOf(ap[0]);
+            entidades.datos.Estilo e = entidades.datos.Estilo.valueOf(ap[1]);
+            j.setGenero(g);
+            j.setEstilo(e);
+        } catch (Exception ignored) {
+            // si viene algo raro, ignorar
+        } finally {
+            aparienciaAplicada.put(id, true);
         }
     }
 
@@ -507,20 +364,6 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
                 if (miPlayerId > 0 && ev.playerId == miPlayerId) {
                     hudSincronizado = true;
                 }
-            }
-        }
-    }
-
-    private void aplicarOtherPendiente() {
-        synchronized (lockOther) {
-            while (!otherPendiente.isEmpty()) {
-                OtherEv ev = otherPendiente.pollFirst();
-                if (ev == null) continue;
-
-                // guardamos para que el HUD lo muestre (no toca gameplay)
-                otherPlayerId = ev.otherId;
-                otherVida = ev.vida;
-                otherVidaMax = ev.vidaMax;
             }
         }
     }
@@ -596,17 +439,259 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
         b.setAwake(true);
     }
 
-    public void onCambioSalaAplicado() {
-        // Limpiamos buffer para no interpolar entre salas distintas
+    private void aplicarOtherPendiente() {
+        synchronized (lockOther) {
+            while (!otherPendiente.isEmpty()) {
+                OtherEv ev = otherPendiente.pollFirst();
+                if (ev == null) continue;
+
+                // guardamos para que el HUD lo muestre (no toca gameplay)
+                otherPlayerId = ev.otherId;
+                otherVida = ev.vida;
+                otherVidaMax = ev.vidaMax;
+            }
+        }
+    }
+
+    private void limpiarEstadoOnline() {
+        ControlJugador.setPausa(false);
+
+        onlineArrancado = false;
+        miPlayerId = -1;
+
+        startRecibido = false;
+        seedServidor = 0L;
+        nivelServidor = 1;
+
         synchronized (samplesPorJugador) {
             samplesPorJugador.clear();
         }
-        teleportFrames = 2;
+
+        salaPendiente = null;
+
+        hudSincronizado = false;
+
+        hudSincronizado = false;
+        motivoDisconnect = null;
+        gameOverRecibido = false;
+        loserId = -1;
+
+        ignorarPosFrames = 0;
+        teleportFrames = 0;
+
+        synchronized (lockItems) {
+            spawnItemsPendientes.clear();
+            despawnItemsPendientes.clear();
+        }
+
+        synchronized (lockEnemies) {
+            spawnEnemiesPendientes.clear();
+            updateEnemiesPendientes.clear();
+            despawnEnemiesPendientes.clear();
+        }
+
+        synchronized (lockHud) {
+            hudPendiente.clear();
+        }
+
+        synchronized (lockOther) {
+            otherPendiente.clear();
+        }
+
+        otherPlayerId = -1;
+        otherVida = 0;
+        otherVidaMax = 0;
     }
 
-    // =====================
+    private final ArrayDeque<HudEv> hudPendiente = new ArrayDeque<>();
+
+    private final ArrayDeque<Integer> despawnEnemiesPendientes = new ArrayDeque<>();
+
+    private final ArrayDeque<Integer> despawnItemsPendientes = new ArrayDeque<>();
+
+    private final ArrayDeque<OtherEv> otherPendiente = new ArrayDeque<>();
+
+    private final ArrayDeque<SpawnEnemyEv> spawnEnemiesPendientes = new ArrayDeque<>();
+
+    private final ArrayDeque<SpawnItemEv> spawnItemsPendientes = new ArrayDeque<>();
+
+    private final ArrayDeque<UpdateEnemyEv> updateEnemiesPendientes = new ArrayDeque<>();
+
+    private final Deque<RoomClearEv> roomClearPendientes = new ArrayDeque<>();
+
+    private final Map<Integer, Boolean> aparienciaAplicada = new HashMap<>();
+
+    private final Object lockRoomClear = new Object();
+
+    /**
+    * Aplica eventos de enemigos recibidos por red.
+    * En online el cliente NO simula IA: solo crea/actualiza los enemigos que manda el server.
+    */
+
+    public void aplicarRoomClearPendiente(control.puzzle.ControlPuzzlePorSala controlPuzzle,
+    juego.sistemas.SistemaSpritesEntidades sprites,
+    mapa.model.Habitacion salaActual) {
+        if (!modoOnline) return;
+        RoomClearEv ev = null;
+        synchronized (lockRoomClear) {
+            if (!roomClearPendientes.isEmpty()) ev = roomClearPendientes.pollFirst();
+        }
+        if (ev == null) return;
+
+        mapa.model.Habitacion sala = null;
+        try { sala = mapa.model.Habitacion.valueOf(ev.sala); } catch (Exception ignored) {}
+        if (sala == null) return;
+
+        // ✅ Marca resuelta (desbloquea puertas visuales y persiste estado)
+        if (controlPuzzle != null) controlPuzzle.marcarResuelta(sala);
+
+        // ✅ Mata enemigos visuales de esa sala (anim) si existe sprites
+        if (sprites != null) sprites.matarEnemigosDeSalaConAnim(sala);
+    }
+
+    /**
+    * Aplica eventos de items recibidos por red sobre el GestorDeEntidades.
+    * En online el cliente NO decide pickups: solo spawnea/despawnea lo que diga el server.
+    */
+    public void aplicarEventosItems(GestorDeEntidades gestorEntidades) {
+        if (!modoOnline || !mundoListo || gestorEntidades == null) return;
+
+        synchronized (lockItems) {
+            while (!spawnItemsPendientes.isEmpty()) {
+                SpawnItemEv ev = spawnItemsPendientes.pollFirst();
+                if (ev == null) continue;
+
+                ItemTipo tipo = null;
+                try { tipo = ItemTipo.valueOf(ev.tipo); } catch (Exception ignored) {}
+                if (tipo == null) continue;
+
+                gestorEntidades.spawnItemOnline(ev.itemId, tipo, ev.x, ev.y);
+            }
+
+            while (!despawnItemsPendientes.isEmpty()) {
+                Integer id = despawnItemsPendientes.pollFirst();
+                if (id == null) continue;
+                gestorEntidades.despawnItemOnline(id);
+            }
+        }
+    }
+
+    /** Devuelve el cambio de sala pendiente (si lo hay) y lo limpia. */
+    public String consumirCambioSala() {
+        if (salaPendiente == null) return null;
+        String s = salaPendiente;
+        salaPendiente = null;
+        return s;
+    }
+
+    /** Pide al server un snapshot completo de HUD/Inventario (usar cuando el mundo ya está listo). */
+    public void enviarReadyOnline() {
+        if (!modoOnline || client == null) return;
+        // Ready:playerId (playerId opcional, lo mando para debug)
+        if (miPlayerId > 0) client.sendMessage("Ready:" + miPlayerId);
+        else client.sendMessage("Ready");
+    }
+
+    /** Resetea el estado de HUD (por ejemplo al recibir Start / cambio de nivel). */
+    public void resetHudSincronizado() {
+        hudSincronizado = false;
+    }
+
+    // ===== Disconnect =====
+    private volatile String motivoDisconnect = null;
+
+    // ===== Estado online =====
+    private boolean modoOnline = false;
+
+    // ===== GameOver (server-driven) =====
+    private volatile boolean gameOverRecibido = false;
+
+    // ===== Sala despejada server-driven =====
+    private static class RoomClearEv {
+        final String sala;
+        RoomClearEv(String sala) { this.sala = sala; }
+    }
+
+    // ===== Sala pendiente =====
+    private volatile String salaPendiente = null;
+
+    // ===== Snapshots para interpolación (cliente visual) =====
+    private static final int MAX_SAMPLES_PER_PLAYER = 10;
+
+    // ===== Start/seed/nivel =====
+    private volatile boolean startRecibido = false;
+
+    // ===== Ventanas anti-glitch =====
+    private volatile int ignorarPosFrames = 0; // (lo dejé, aunque hoy no lo uses)
+    private volatile int teleportFrames = 0;
+
+    // Apariencia que el jugador eligió en el menú (para aplicar localmente al conectarse)
+    private String miGeneroDeseado = "MASCULINO";
+
+    // Apariencia recibida del servidor (playerId -> [genero, estilo])
+    private final Map<Integer, String[]> aparienciaPorJugador = new HashMap<>();
+
+    // Aplicación de updates
+
+    private void aplicarAparienciasSiHaceFalta(Jugador jugador1, Jugador jugador2) {
+        if (jugador1 != null) aplicarAparienciaSiHaceFalta(jugador1);
+        if (jugador2 != null) aplicarAparienciaSiHaceFalta(jugador2);
+    }
+
+    // Config / lifecycle
+
+    public void setClient(ClientThread client) {
+        this.client = client;
+        this.modoOnline = (client != null);
+
+        if (!modoOnline) limpiarEstadoOnline();
+    }
+
+    // Daño callbacks (desde ClientThread)
+
+    @Override
+    public void roomClear(String sala) {
+        if (sala == null || sala.isBlank()) return;
+        synchronized (lockRoomClear) {
+            roomClearPendientes.addLast(new RoomClearEv(sala.trim()));
+        }
+    }
+
+    // Enemigos (server-driven)
+    private static final class SpawnEnemyEv {
+        final int enemyId;
+        final String nombre;
+        final float x;
+        final float y;
+        final String sala;
+        SpawnEnemyEv(int enemyId, String nombre, float x, float y, String sala) {
+            this.enemyId = enemyId;
+            this.nombre = nombre;
+            this.x = x;
+            this.y = y;
+            this.sala = sala;
+        }
+    }
+
+    // Enemigos callbacks (desde ClientThread)
+
+    @Override
+    public void spawnEnemy(int enemyId, String nombre, float x, float y, String sala) {
+        if (!modoOnline) return;
+        synchronized (lockEnemies) {
+            spawnEnemiesPendientes.addLast(new SpawnEnemyEv(enemyId, nombre, x, y, sala));
+            while (spawnEnemiesPendientes.size() > 50) spawnEnemiesPendientes.pollFirst();
+        }
+    }
+
+    // Envíos al server
+
+    public void enviarRoomClearReq(mapa.model.Habitacion sala) {
+        if (!modoOnline || !onlineArrancado || client == null || sala == null) return;
+        client.sendMessage("RoomClearReq:" + sala.name());
+    }
+
     // GameController callbacks desde ClientThread
-    // =====================
 
     @Override
     public void connect(int playerId) {
@@ -618,81 +703,33 @@ public void aplicarEventosEnemigos(GestorDeEntidades gestorEntidades) {
         appearance(miPlayerId, miGeneroDeseado, miEstiloDeseado);
     }
 
+    // Getters / consume
 
-@Override
-public void appearance(int playerId, String genero, String estilo) {
-    if (playerId <= 0) return;
-    if (genero == null) genero = "MASCULINO";
-    if (estilo == null) estilo = "CLASICO";
-    aparienciaPorJugador.put(playerId, new String[]{genero, estilo});
-    aparienciaAplicada.put(playerId, false);
-    System.out.println("[NET] Appearance recv id=" + playerId + " " + genero + " " + estilo);
-}
-
-
-    @Override
-    public void start(long seed, int nivel) {
-        // ✅ TRANSICIÓN DE NIVEL: mientras el hilo render recrea World, no aplicar Box2D ni samples
-        this.mundoListo = false;
-
-        this.seedServidor = seed;
-        this.nivelServidor = nivel;
-
-        synchronized (samplesPorJugador) {
-            samplesPorJugador.clear();
-        }
-        salaPendiente = null;
-
-        // ✅ nuevo nivel => HUD debe re-sincronizarse por snapshot del server
-        hudSincronizado = false;
-
-        this.startRecibido = true;
-        this.onlineArrancado = true;
-
-        // input local pausado en online
-        ControlJugador.setPausa(true);
-
-        ignorarPosFrames = 0;
-        teleportFrames = 2;
-
-        Gdx.app.log(TAG, "Start recibido seed=" + seed + " nivel=" + nivel);
+    public boolean isModoOnline() {
+        return modoOnline;
     }
 
-    /** Pide al server un snapshot completo de HUD/Inventario (usar cuando el mundo ya está listo). */
-    public void enviarReadyOnline() {
-        if (!modoOnline || client == null) return;
-        // Ready:playerId (playerId opcional, lo mando para debug)
-        if (miPlayerId > 0) client.sendMessage("Ready:" + miPlayerId);
-        else client.sendMessage("Ready");
-    }
+    // HUD / Inventario (server-driven)
 
-    @Override
-    public void updatePlayerPosition(int playerId, float x, float y) {
-        if (!modoOnline) return;
-        if (!mundoListo) return; // durante transición de nivel, ignoramos posiciones para evitar crash nativo
+    // ✅ En ONLINE el HUD es autoritativo del server.
+    // Hasta recibir el primer snapshot Hud del server, el HUD debe mostrarse como "sin sincronizar".
+    private volatile boolean hudSincronizado = false;
 
-        final long nowMs = System.currentTimeMillis();
-        synchronized (samplesPorJugador) {
-            Deque<Sample> q = samplesPorJugador.computeIfAbsent(playerId, k -> new ArrayDeque<>());
-            // Asegura orden no-decreciente por si el reloj cambiara levemente
-            if (!q.isEmpty() && nowMs < q.peekLast().tMs) {
-                q.addLast(new Sample(x, y, q.peekLast().tMs));
-            } else {
-                q.addLast(new Sample(x, y, nowMs));
-            }
-            while (q.size() > MAX_SAMPLES_PER_PLAYER) q.pollFirst();
+    // Items (server-driven)
+    private static final class SpawnItemEv {
+        final int itemId;
+        final String tipo;
+        final float x;
+        final float y;
+        SpawnItemEv(int itemId, String tipo, float x, float y) {
+            this.itemId = itemId;
+            this.tipo = tipo;
+            this.x = x;
+            this.y = y;
         }
     }
 
-    @Override
-    public void updateRoom(String habitacionId) {
-        salaPendiente = habitacionId;
-        teleportFrames = 2;
-    }
-
-    // =====================
     // Items callbacks (desde ClientThread)
-    // =====================
 
     @Override
     public void spawnItem(int itemId, String tipo, float x, float y) {
@@ -702,127 +739,74 @@ public void appearance(int playerId, String genero, String estilo) {
         }
     }
 
-    @Override
-    public void despawnItem(int itemId) {
-        if (!modoOnline) return;
-        synchronized (lockItems) {
-            despawnItemsPendientes.addLast(itemId);
+    // MVP: UI del otro jugador (solo vida)
+    private static final class OtherEv {
+        final int otherId;
+        final int vida;
+        final int vidaMax;
+
+        OtherEv(int otherId, int vida, int vidaMax) {
+            this.otherId = otherId;
+            this.vida = vida;
+            this.vidaMax = vidaMax;
         }
     }
 
-    @Override
-    public void pickupItem(int jugadorId, int itemId, String tipo) {
-        // Por ahora: el pickup solo implica despawn visual.
-        // En el próximo paso vamos a sincronizar inventario/stats/HUD.
-        despawnItem(itemId);
+    // playerId -> cola de samples (ordenados por llegada)
+    private final Map<Integer, Deque<Sample>> samplesPorJugador = new HashMap<>();
+
+    // ✅ Mantengo compat: con playerId o sin playerId (server acepta ambos)
+    public void enviarPuertaOnline(String origen, String destino, String dir) {
+        if (!modoOnline || !onlineArrancado || client == null) return;
+
+        final String msg;
+        if (miPlayerId > 0) msg = "Door:" + miPlayerId + ":" + origen + ":" + destino + ":" + dir;
+        else msg = "Door:" + origen + ":" + destino + ":" + dir;
+
+        Gdx.app.log(TAG, ">> " + msg);
+        client.sendMessage(msg);
     }
 
-    @Override
-    public void hud(int playerId, int vida, int vidaMax, String tiposCsv) {
-        if (!modoOnline) return;
-        synchronized (lockHud) {
-            hudPendiente.addLast(new HudEv(playerId, vida, vidaMax, tiposCsv));
-            // Mantener cola acotada
-            while (hudPendiente.size() > 20) hudPendiente.pollFirst();
+    private static final class HudEv {
+        final int playerId;
+        final int vida;
+        final int vidaMax;
+        final String tiposCsv;
+
+        HudEv(int playerId, int vida, int vidaMax, String tiposCsv) {
+            this.playerId = playerId;
+            this.vida = vida;
+            this.vidaMax = vidaMax;
+            this.tiposCsv = (tiposCsv != null) ? tiposCsv : "";
         }
     }
 
-    @Override
-    public void other(int otherPlayerId, int vida, int vidaMax) {
-        if (!modoOnline) return;
-        synchronized (lockOther) {
-            otherPendiente.addLast(new OtherEv(otherPlayerId, vida, vidaMax));
-            while (otherPendiente.size() > 10) otherPendiente.pollFirst();
+    private static final class UpdateEnemyEv {
+        final int enemyId;
+        final float x;
+        final float y;
+        UpdateEnemyEv(int enemyId, float x, float y) {
+            this.enemyId = enemyId;
+            this.x = x;
+            this.y = y;
         }
     }
 
-    // =====================
-    // Enemigos callbacks (desde ClientThread)
-    // =====================
+    private static final boolean TELEPORT_ALWAYS_ONLINE = true; // (lo dejé por compat aunque hoy no lo uses)
 
-    @Override
-    public void spawnEnemy(int enemyId, String nombre, float x, float y, String sala) {
-        if (!modoOnline) return;
-        synchronized (lockEnemies) {
-            spawnEnemiesPendientes.addLast(new SpawnEnemyEv(enemyId, nombre, x, y, sala));
-            while (spawnEnemiesPendientes.size() > 50) spawnEnemiesPendientes.pollFirst();
+    private ClientThread client;
+
+    private static final long INTERP_DELAY_MS = 100; // delay visual para interpolar (buffer)
+
+    private static final class Sample {
+        final float x;
+        final float y;
+        final long tMs;
+
+        Sample(float x, float y, long tMs) {
+            this.x = x;
+            this.y = y;
+            this.tMs = tMs;
         }
-    }
-
-    @Override
-    public void updateEnemy(int enemyId, float x, float y) {
-        if (!modoOnline) return;
-        synchronized (lockEnemies) {
-            updateEnemiesPendientes.addLast(new UpdateEnemyEv(enemyId, x, y));
-            while (updateEnemiesPendientes.size() > 200) updateEnemiesPendientes.pollFirst();
-        }
-    }
-
-    @Override
-    public void despawnEnemy(int enemyId) {
-        if (!modoOnline) return;
-        synchronized (lockEnemies) {
-            despawnEnemiesPendientes.addLast(enemyId);
-            while (despawnEnemiesPendientes.size() > 50) despawnEnemiesPendientes.pollFirst();
-        }
-    }
-
-    // =====================
-    // Daño callbacks (desde ClientThread)
-    // =====================
-
-@Override
-public void roomClear(String sala) {
-    if (sala == null || sala.isBlank()) return;
-    synchronized (lockRoomClear) {
-        roomClearPendientes.addLast(new RoomClearEv(sala.trim()));
     }
 }
-
-public void damage(int playerId, int vida, int vidaMax) {
-        if (!modoOnline) return;
-
-        // Reutilizamos las colas existentes:
-        // - Si es mi jugador => va a Hud (porque ese HUD se renderiza)
-        // - Si es el otro => va a Other (porque se muestra como UI secundaria)
-        if (miPlayerId > 0 && playerId == miPlayerId) {
-            hud(playerId, vida, vidaMax, "");
-        } else {
-            other(playerId, vida, vidaMax);
-        }
-    }
-
-    @Override
-    public void dead(int playerId) {
-        // MVP: hoy solo es informativo. El HUD ya reflejará vida=0.
-    }
-
-    @Override
-    public void gameOver(int loserId) {
-        if (!modoOnline) return;
-        this.loserId = loserId;
-        this.gameOverRecibido = true;
-
-        // cortamos input local cuanto antes
-        ControlJugador.setPausa(true);
-        Gdx.app.log(TAG, "GAME OVER recibido. loserId=" + loserId);
-    }
-
-
-    @Override
-    public void disconnect(String reason) {
-        motivoDisconnect = reason;
-    }
-
-    // ===== Sala despejada server-driven =====
-    private static class RoomClearEv {
-        final String sala;
-        RoomClearEv(String sala) { this.sala = sala; }
-    }
-    private final Object lockRoomClear = new Object();
-    private final Deque<RoomClearEv> roomClearPendientes = new ArrayDeque<>();
-
-}
-
-
-

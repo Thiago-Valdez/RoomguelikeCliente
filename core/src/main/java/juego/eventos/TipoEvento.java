@@ -1,9 +1,9 @@
 package juego.eventos;
 
 /**
- * Identificador estable de tipos de evento.
- * Útil para logging/telemetría y futuro ruteo/serialización de eventos (red).
- */
+* Identificador estable de tipos de evento.
+* Útil para logging/telemetría y futuro ruteo/serialización de eventos (red).
+*/
 public enum TipoEvento {
     BOTON,
     PUERTA,

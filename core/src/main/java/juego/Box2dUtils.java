@@ -7,10 +7,9 @@ import com.badlogic.gdx.physics.box2d.PolygonShape;
 import com.badlogic.gdx.physics.box2d.Shape;
 
 /**
- * Helpers chicos para Box2D, para evitar repetir código y allocations.
- */
+* Helpers chicos para Box2D, para evitar repetir código y allocations.
+*/
 public final class Box2dUtils {
-
     private Box2dUtils() {}
 
     public record Aabb(float minX, float minY, float maxX, float maxY) {
@@ -19,9 +18,9 @@ public final class Box2dUtils {
     }
 
     /**
-     * Devuelve el AABB (axis-aligned) en coordenadas mundo para un fixture.
-     * Solo soporta PolygonShape (suficiente para tus puertas/bloqueos).
-     */
+    * Devuelve el AABB (axis-aligned) en coordenadas mundo para un fixture.
+    * Solo soporta PolygonShape (suficiente para tus puertas/bloqueos).
+    */
     public static Aabb aabb(Fixture fixture) {
         if (fixture == null) return new Aabb(0,0,0,0);
 

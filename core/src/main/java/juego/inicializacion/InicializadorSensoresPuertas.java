@@ -2,19 +2,20 @@ package juego.inicializacion;
 
 import fisica.FisicaMundo;
 import fisica.GeneradorSensoresPuertas;
+
 import juego.Box2dUtils;
+
 import mapa.botones.*;
 import mapa.generacion.*;
 import mapa.model.*;
 import mapa.puertas.*;
 
 /**
- * Crea los sensores de puertas (Box2D) para TODA la disposición.
- *
- * Regla del proyecto: el generador solo crea puertas/sensores; las paredes vienen de Tiled.
- */
+* Crea los sensores de puertas (Box2D) para TODA la disposición.
+*
+* Regla del proyecto: el generador solo crea puertas/sensores; las paredes vienen de Tiled.
+*/
 public final class InicializadorSensoresPuertas {
-
     private InicializadorSensoresPuertas() {}
 
     public static void generarSensoresPuertas(FisicaMundo fisica, DisposicionMapa disposicion, java.util.function.Consumer<RegistroPuerta> onRegistro) {
@@ -31,7 +32,7 @@ public final class InicializadorSensoresPuertas {
     }
 
     /**
-     * Pequeño DTO para registrar puertas visuales.
-     */
+    * Pequeño DTO para registrar puertas visuales.
+    */
     public record RegistroPuerta(com.badlogic.gdx.physics.box2d.Fixture fixture, Habitacion origen, PuertaVisual visual) {}
 }

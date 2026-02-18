@@ -13,26 +13,19 @@ import mapa.model.Habitacion;
 import mapa.puertas.EspecificacionPuerta;
 
 public class GeneradorSensoresPuertas {
-
-    public interface ListenerPuerta {
-        void onPuertaCreada(Fixture fixture,
-                            Habitacion origen,
-                            Habitacion destino,
-                            Direccion direccion);
-    }
-
-    private final World world;
-    private final List<Habitacion> camino;
-    private final Set<Habitacion> caminoSet;
-    private final DisposicionMapa disposicion;
+    private static final float ANCHO_PUERTA = 96f;
 
     private static final float GROSOR_MURO = 16f;
 
-    private static final float ANCHO_PUERTA = 96f;
     private static final float ALTO_PUERTA  = 96f;
 
-    /** 🔥 MUY IMPORTANTE: corre el sensor hacia adentro para que no se active desde la sala vecina*/
-    private static final float OFFSET_SENSOR = 12f;
+    private final World world;
+
+    private final DisposicionMapa disposicion;
+
+    private final List<Habitacion> camino;
+
+    private final Set<Habitacion> caminoSet;
 
     public GeneradorSensoresPuertas(FisicaMundo fisica, DisposicionMapa disposicion) {
         this.world = fisica.world();
@@ -47,6 +40,31 @@ public class GeneradorSensoresPuertas {
         for (Habitacion h : camino) {
             crearSensoresPuertas(h, listener);
         }
+    }
+
+    private void crearBloqueoDePuerta(Habitacion origen, Direccion dir, EspecificacionPuerta spec) {
+        float baseX = origen.gridX * origen.ancho;
+        float baseY = origen.gridY * origen.alto;
+
+        float px = baseX + spec.localX;
+        float py = baseY + spec.localY;
+
+        // 🔥 También lo metemos adentro para que no “tape” del lado de la sala vecina
+        switch (dir) {
+        case NORTE -> py -= OFFSET_SENSOR;
+        case SUR   -> py += OFFSET_SENSOR;
+        case ESTE  -> px -= OFFSET_SENSOR;
+        case OESTE -> px += OFFSET_SENSOR;
+        }
+
+        float halfW, halfH;
+        switch (dir) {
+        case NORTE, SUR -> { halfW = ANCHO_PUERTA / 2f; halfH = GROSOR_MURO / 2f; }
+        case ESTE, OESTE -> { halfW = GROSOR_MURO / 2f; halfH = ALTO_PUERTA / 2f; }
+        default -> { halfW = ANCHO_PUERTA / 2f; halfH = ALTO_PUERTA / 2f; }
+        }
+
+        crearMuro(px, py, halfW, halfH);
     }
 
     private void crearMuro(float cx, float cy, float halfW, float halfH) {
@@ -81,8 +99,8 @@ public class GeneradorSensoresPuertas {
 
             if (destino == null || !caminoSet.contains(destino)) {
                 Gdx.app.log("GEN_PUERTAS",
-                    "Puerta BLOQUEADA desde " + origen.nombreVisible +
-                        " por " + dir + " (sin destino en piso)");
+                "Puerta BLOQUEADA desde " + origen.nombreVisible +
+                " por " + dir + " (sin destino en piso)");
                 crearBloqueoDePuerta(origen, dir, spec);
                 continue;
             }
@@ -93,17 +111,17 @@ public class GeneradorSensoresPuertas {
 
             // 🔥 Corrimiento hacia adentro para que no se active desde la sala vecina
             switch (dir) {
-                case NORTE -> py -= OFFSET_SENSOR;
-                case SUR   -> py += OFFSET_SENSOR;
-                case ESTE  -> px -= OFFSET_SENSOR;
-                case OESTE -> px += OFFSET_SENSOR;
+            case NORTE -> py -= OFFSET_SENSOR;
+            case SUR   -> py += OFFSET_SENSOR;
+            case ESTE  -> px -= OFFSET_SENSOR;
+            case OESTE -> px += OFFSET_SENSOR;
             }
 
             float halfW, halfH;
             switch (dir) {
-                case NORTE, SUR -> { halfW = ANCHO_PUERTA / 2f; halfH = GROSOR_MURO; }
-                case ESTE, OESTE -> { halfW = GROSOR_MURO; halfH = ALTO_PUERTA / 2f; }
-                default -> { halfW = ANCHO_PUERTA / 2f; halfH = ALTO_PUERTA / 2f; }
+            case NORTE, SUR -> { halfW = ANCHO_PUERTA / 2f; halfH = GROSOR_MURO; }
+            case ESTE, OESTE -> { halfW = GROSOR_MURO; halfH = ALTO_PUERTA / 2f; }
+            default -> { halfW = ANCHO_PUERTA / 2f; halfH = ALTO_PUERTA / 2f; }
             }
 
             BodyDef bd = new BodyDef();
@@ -124,34 +142,18 @@ public class GeneradorSensoresPuertas {
             if (listener != null) listener.onPuertaCreada(fixture, origen, destino, dir);
 
             Gdx.app.log("GEN_PUERTAS",
-                "Puerta creada: " + origen.nombreVisible +
-                    " --" + dir + "--> " + destino.nombreVisible);
+            "Puerta creada: " + origen.nombreVisible +
+            " --" + dir + "--> " + destino.nombreVisible);
         }
     }
 
-    private void crearBloqueoDePuerta(Habitacion origen, Direccion dir, EspecificacionPuerta spec) {
-        float baseX = origen.gridX * origen.ancho;
-        float baseY = origen.gridY * origen.alto;
+    /** 🔥 MUY IMPORTANTE: corre el sensor hacia adentro para que no se active desde la sala vecina*/
+    private static final float OFFSET_SENSOR = 12f;
 
-        float px = baseX + spec.localX;
-        float py = baseY + spec.localY;
-
-        // 🔥 También lo metemos adentro para que no “tape” del lado de la sala vecina
-        switch (dir) {
-            case NORTE -> py -= OFFSET_SENSOR;
-            case SUR   -> py += OFFSET_SENSOR;
-            case ESTE  -> px -= OFFSET_SENSOR;
-            case OESTE -> px += OFFSET_SENSOR;
-        }
-
-        float halfW, halfH;
-        switch (dir) {
-            case NORTE, SUR -> { halfW = ANCHO_PUERTA / 2f; halfH = GROSOR_MURO / 2f; }
-            case ESTE, OESTE -> { halfW = GROSOR_MURO / 2f; halfH = ALTO_PUERTA / 2f; }
-            default -> { halfW = ANCHO_PUERTA / 2f; halfH = ALTO_PUERTA / 2f; }
-        }
-
-        crearMuro(px, py, halfW, halfH);
+    public interface ListenerPuerta {
+        void onPuertaCreada(Fixture fixture,
+        Habitacion origen,
+        Habitacion destino,
+        Direccion direccion);
     }
 }
-

@@ -11,116 +11,58 @@ import com.badlogic.gdx.utils.Array;
 import entidades.Entidad;
 
 public abstract class SpritesEntidad {
+    protected Animation<TextureRegion> animQuieto;
+
+    protected Array<TextureRegion> framesQuieto;
+
+    protected Texture texQuieto;
+
+    protected TextureRegion fallbackQuieto;
+
+    protected boolean enMuerte = false;
+
+    protected boolean ultimaMiradaDerecha = true;
 
     protected final Entidad entidad;
 
     protected final int frameW;
-    protected final int frameH;
 
     protected float offsetX = 0f;
-    protected float offsetY = 0f;
-
-    /** Ancla al “pie” (en coords del mundo Box2D). */
-    protected float anclaPie = 12f;
 
     protected float stateTime = 0f;
 
-    protected Texture texQuieto;
-    protected Texture texMovimiento;
-    protected Texture texMuerte;
-
-    protected boolean enMuerte = false;
-    protected boolean muerteFinalizada = false;
-    protected float muerteTime = 0f;
-    protected float tiempoAnim = 0f;
-
-    protected Array<TextureRegion> framesQuieto;
-    protected Array<TextureRegion> framesMovimiento;
-    protected Array<TextureRegion> framesMuerte;
-
-    protected Animation<TextureRegion> animQuieto;
     protected Animation<TextureRegion> animMovimiento;
+
     protected Animation<TextureRegion> animMuerte;
 
-    protected TextureRegion fallbackQuieto;
+    protected Array<TextureRegion> framesMovimiento;
+
+    protected Array<TextureRegion> framesMuerte;
+
+    protected Texture texMovimiento;
+
+    protected Texture texMuerte;
+
     protected TextureRegion fallbackMovimiento;
+
     protected TextureRegion fallbackMuerte;
 
-    protected boolean ultimaMiradaDerecha = true;
+    protected boolean muerteFinalizada = false;
 
-    protected SpritesEntidad(Entidad entidad, int frameW, int frameH) {
-        this.entidad = entidad;
-        this.frameW = frameW;
-        this.frameH = frameH;
+    protected final int frameH;
+
+    protected float muerteTime = 0f;
+
+    protected float offsetY = 0f;
+
+    protected float tiempoAnim = 0f;
+
+    public boolean estaEnMuerte() {
+        return enMuerte;
     }
 
-    protected abstract String pathQuieto();
-    protected abstract String pathMovimiento();
-    protected String pathMuerte() { return null; }
-
-    protected float duracionQuieto() { return 0.20f; }
-    protected float duracionMovimiento() { return 0.12f; }
-    protected float duracionMuerte() { return 0.10f; }
-
-    // ======================================================
-    // CARGA
-    // ======================================================
-
-    protected void cargar() {
-        texQuieto = new Texture(Gdx.files.internal(pathQuieto()));
-        texMovimiento = new Texture(Gdx.files.internal(pathMovimiento()));
-
-        String pm = pathMuerte();
-        if (pm != null && !pm.isBlank()) {
-            texMuerte = new Texture(Gdx.files.internal(pm));
-        }
-    }
-
-    protected void construirAnimaciones() {
-        framesQuieto = split(texQuieto);
-        framesMovimiento = split(texMovimiento);
-
-        animQuieto = new Animation<>(duracionQuieto(), framesQuieto, Animation.PlayMode.LOOP);
-        animMovimiento = new Animation<>(duracionMovimiento(), framesMovimiento, Animation.PlayMode.LOOP);
-
-        fallbackQuieto = !framesQuieto.isEmpty() ? framesQuieto.first() : new TextureRegion(texQuieto);
-        fallbackMovimiento = !framesMovimiento.isEmpty() ? framesMovimiento.first() : new TextureRegion(texMovimiento);
-
-        if (texMuerte != null) {
-            framesMuerte = split(texMuerte);
-            animMuerte = new Animation<>(duracionMuerte(), framesMuerte, Animation.PlayMode.NORMAL);
-            fallbackMuerte = !framesMuerte.isEmpty() ? framesMuerte.first() : new TextureRegion(texMuerte);
-        }
-    }
-
-    protected Array<TextureRegion> split(Texture tex) {
-        Array<TextureRegion> frames = new Array<>();
-        TextureRegion[][] grid = TextureRegion.split(tex, frameW, frameH);
-
-        for (TextureRegion[] row : grid) {
-            for (TextureRegion r : row) {
-                frames.add(r);
-            }
-        }
-        return frames;
-    }
-
-    // ======================================================
-    // ESTADO
-    // ======================================================
-
-    public void setOffset(float x, float y) {
-        this.offsetX = x;
-        this.offsetY = y;
-    }
-
-    public void iniciarMuerte() {
-        if (enMuerte || animMuerte == null) return;
-
-        enMuerte = true;
-        muerteFinalizada = false;
-        muerteTime = 0f;
-        stateTime = 0f;
+    public boolean muerteTerminada() {
+        return muerteFinalizada;
     }
 
     public void detenerMuerte() {
@@ -130,30 +72,19 @@ public abstract class SpritesEntidad {
         stateTime = 0f;
     }
 
-    public boolean muerteTerminada() {
-        return muerteFinalizada;
+    public void dispose() {
+        if (texQuieto != null) texQuieto.dispose();
+        if (texMovimiento != null) texMovimiento.dispose();
+        if (texMuerte != null) texMuerte.dispose();
     }
 
-    public boolean estaEnMuerte() {
-        return enMuerte;
-    }
+    public void iniciarMuerte() {
+        if (enMuerte || animMuerte == null) return;
 
-    // ======================================================
-    // UPDATE / RENDER
-    // ======================================================
-
-    public void update(float delta) {
-        stateTime += delta;
-        tiempoAnim += delta;
-
-        if (enMuerte && animMuerte != null) {
-            muerteTime += delta;
-            float dur = animMuerte.getAnimationDuration();
-            if (muerteTime >= dur) {
-                muerteTime = dur;
-                muerteFinalizada = true;
-            }
-        }
+        enMuerte = true;
+        muerteFinalizada = false;
+        muerteTime = 0f;
+        stateTime = 0f;
     }
 
     public void render(SpriteBatch batch) {
@@ -185,6 +116,24 @@ public abstract class SpritesEntidad {
         }
     }
 
+    protected Array<TextureRegion> split(Texture tex) {
+        Array<TextureRegion> frames = new Array<>();
+        TextureRegion[][] grid = TextureRegion.split(tex, frameW, frameH);
+
+        for (TextureRegion[] row : grid) {
+            for (TextureRegion r : row) {
+                frames.add(r);
+            }
+        }
+        return frames;
+    }
+
+    protected SpritesEntidad(Entidad entidad, int frameW, int frameH) {
+        this.entidad = entidad;
+        this.frameW = frameW;
+        this.frameH = frameH;
+    }
+
     protected TextureRegion elegirFrame() {
         if (enMuerte) {
             return (animMuerte != null) ? animMuerte.getKeyFrame(muerteTime, false) : fallbackMuerte;
@@ -203,9 +152,68 @@ public abstract class SpritesEntidad {
         return animQuieto != null ? animQuieto.getKeyFrame(stateTime, true) : fallbackQuieto;
     }
 
-    public void dispose() {
-        if (texQuieto != null) texQuieto.dispose();
-        if (texMovimiento != null) texMovimiento.dispose();
-        if (texMuerte != null) texMuerte.dispose();
+    protected abstract String pathQuieto();
+
+    protected void construirAnimaciones() {
+        framesQuieto = split(texQuieto);
+        framesMovimiento = split(texMovimiento);
+
+        animQuieto = new Animation<>(duracionQuieto(), framesQuieto, Animation.PlayMode.LOOP);
+        animMovimiento = new Animation<>(duracionMovimiento(), framesMovimiento, Animation.PlayMode.LOOP);
+
+        fallbackQuieto = !framesQuieto.isEmpty() ? framesQuieto.first() : new TextureRegion(texQuieto);
+        fallbackMovimiento = !framesMovimiento.isEmpty() ? framesMovimiento.first() : new TextureRegion(texMovimiento);
+
+        if (texMuerte != null) {
+            framesMuerte = split(texMuerte);
+            animMuerte = new Animation<>(duracionMuerte(), framesMuerte, Animation.PlayMode.NORMAL);
+            fallbackMuerte = !framesMuerte.isEmpty() ? framesMuerte.first() : new TextureRegion(texMuerte);
+        }
+    }
+
+    protected String pathMuerte() { return null; }
+
+    protected float duracionQuieto() { return 0.20f; }
+    protected float duracionMovimiento() { return 0.12f; }
+    protected float duracionMuerte() { return 0.10f; }
+
+    // CARGA
+
+    protected void cargar() {
+        texQuieto = new Texture(Gdx.files.internal(pathQuieto()));
+        texMovimiento = new Texture(Gdx.files.internal(pathMovimiento()));
+
+        String pm = pathMuerte();
+        if (pm != null && !pm.isBlank()) {
+            texMuerte = new Texture(Gdx.files.internal(pm));
+        }
+    }
+
+    protected abstract String pathMovimiento();
+
+    /** Ancla al “pie” (en coords del mundo Box2D). */
+    protected float anclaPie = 12f;
+
+    // ESTADO
+
+    public void setOffset(float x, float y) {
+        this.offsetX = x;
+        this.offsetY = y;
+    }
+
+    // UPDATE / RENDER
+
+    public void update(float delta) {
+        stateTime += delta;
+        tiempoAnim += delta;
+
+        if (enMuerte && animMuerte != null) {
+            muerteTime += delta;
+            float dur = animMuerte.getAnimationDuration();
+            if (muerteTime >= dur) {
+                muerteTime = dur;
+                muerteFinalizada = true;
+            }
+        }
     }
 }

@@ -17,12 +17,11 @@ import juego.eventos.EventoPuerta;
 import red.RedPartidaCliente;
 
 /**
- * Maneja el cambio de sala por puertas y el cooldown anti "ping-pong".
- * OFFLINE: teletransporta local
- * ONLINE: avisa al server con Door y NO teletransporta acá
- */
+* Maneja el cambio de sala por puertas y el cooldown anti "ping-pong".
+* OFFLINE: teletransporta local
+* ONLINE: avisa al server con Door y NO teletransporta acá
+*/
 public final class SistemaTransicionSala {
-
     private int framesBloqueoPuertas = 0;
 
     public boolean bloqueoActivo() {
@@ -34,18 +33,18 @@ public final class SistemaTransicionSala {
     }
 
     public Habitacion procesarPuertasPendientes(
-        Habitacion salaActual,
-        ColaEventos eventos,
-        ControlPuzzlePorSala controlPuzzle,
-        GestorSalas gestorSalas,
-        DisposicionMapa disposicion,
-        BiConsumer<Habitacion, Habitacion> notificarCambioSala,
-        TiledMap mapaTiled,
-        World world,
-        GestorDeEntidades gestorEntidades,
-        SistemaSpritesEntidades sprites,
-        boolean esOnline,
-        RedPartidaCliente redPartida
+    Habitacion salaActual,
+    ColaEventos eventos,
+    ControlPuzzlePorSala controlPuzzle,
+    GestorSalas gestorSalas,
+    DisposicionMapa disposicion,
+    BiConsumer<Habitacion, Habitacion> notificarCambioSala,
+    TiledMap mapaTiled,
+    World world,
+    GestorDeEntidades gestorEntidades,
+    SistemaSpritesEntidades sprites,
+    boolean esOnline,
+    RedPartidaCliente redPartida
     ) {
 
         if (eventos == null || eventos.isEmpty()) return salaActual;

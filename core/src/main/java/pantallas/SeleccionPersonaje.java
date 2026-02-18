@@ -8,8 +8,8 @@ import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
-import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
 
@@ -18,38 +18,56 @@ import entidades.datos.Genero;
 import io.github.principal.Principal;
 
 /**
- * Pantalla intermedia para elegir la apariencia del jugador (género + estilo).
- * Se guarda en Principal y luego se envía al servidor en el Connect.
- */
+* Pantalla intermedia para elegir la apariencia del jugador (género + estilo).
+* Se guarda en Principal y luego se envía al servidor en el Connect.
+*/
 public class SeleccionPersonaje implements Screen {
-
-    private final Principal game;
-    private final Screen pantallaVolver;
-
-    private Stage stage;
-    private Skin skin;
-
-    private Texture texFondo;
-    private Image imgFondo;
-
-    // Preview del personaje
-    private Texture texPreview;
-    private Image imgPreview;
-
-    
-    // Mensaje de espera
-    private Label lblEsperando;
-    private boolean esperandoConexion = false;
-    private float esperandoTime = 0f;
-// animación de quieto (preview)
-    private TextureRegion[] previewFrames;
-    private TextureRegionDrawable previewDrawable;
-    private float previewStateTime = 0f;
     private static final float PREVIEW_FRAME_DURATION = 0.15f;
 
-    public SeleccionPersonaje(Principal game, Screen pantallaVolver) {
-        this.game = game;
-        this.pantallaVolver = pantallaVolver;
+    private Stage stage;
+
+    private Texture texFondo;
+
+    private final Principal game;
+
+    private Image imgFondo;
+
+    private Image imgPreview;
+
+    private Skin skin;
+
+    private TextureRegionDrawable previewDrawable;
+
+    private boolean esperandoConexion = false;
+
+    private final Screen pantallaVolver;
+
+    private float esperandoTime = 0f;
+
+    private float previewStateTime = 0f;
+
+    @Override
+    public void render(float delta) {
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        // Animación idle del preview
+        if (imgPreview != null && previewFrames != null && previewFrames.length > 0) {
+            previewStateTime += delta;
+            int idx = (int) (previewStateTime / PREVIEW_FRAME_DURATION) % previewFrames.length;
+            if (previewDrawable != null) previewDrawable.setRegion(previewFrames[idx]);
+        }
+
+        stage.act(delta);
+        stage.draw();
+
+        // Si el usuario tocó Continuar, mostramos el mensaje al menos 1 frame antes de cambiar
+        if (esperandoConexion) {
+            esperandoTime += delta;
+            if (esperandoTime >= 0.15f) {
+                esperandoConexion = false;
+                game.cambiarPantalla(new JuegoPrincipal(game));
+            }
+        }
     }
 
     @Override
@@ -61,6 +79,65 @@ public class SeleccionPersonaje implements Screen {
 
         construirFondo();
         construirUI();
+    }
+
+    public SeleccionPersonaje(Principal game, Screen pantallaVolver) {
+        this.game = game;
+        this.pantallaVolver = pantallaVolver;
+    }
+
+    @Override public void resize(int width, int height) { stage.getViewport().update(width, height, true); }
+    @Override public void pause() {}
+    @Override public void resume() {}
+    @Override public void hide() {}
+    @Override public void dispose() {
+        if (stage != null) stage.dispose();
+        if (skin != null) skin.dispose();
+        if (texFondo != null) texFondo.dispose();
+        if (texPreview != null) texPreview.dispose();
+    }
+
+    private String previewPath(Genero genero, Estilo estilo) {
+        String base = (genero == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
+        int estiloNum = (estilo != null) ? (estilo.ordinal() + 1) : 1;
+
+        String conEstilo = "Jugadores/" + base + estiloNum + "_quieto.png";
+        if (Gdx.files.internal(conEstilo).exists()) return conEstilo;
+
+        String sinEstilo = "Jugadores/" + base + "_quieto.png";
+        return sinEstilo;
+    }
+
+    private void actualizarPreview() {
+        // fallback a lo que haya guardado en Principal
+        actualizarPreview(game.getGeneroSeleccionado(), game.getEstiloSeleccionado());
+    }
+
+    private void actualizarPreview(Genero genero, Estilo estilo) {
+        String path = previewPath(genero, estilo);
+
+        try {
+            if (texPreview != null) texPreview.dispose();
+        } catch (Exception ignored) {}
+
+        texPreview = new Texture(Gdx.files.internal(path));
+        texPreview.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
+        // el *_quieto.png es un spritesheet (ej: 4 frames horizontal). Armamos frames automáticamente.
+        int frames = 4;
+        int frameW = texPreview.getWidth() / frames;
+        int frameH = texPreview.getHeight();
+        previewFrames = new TextureRegion[frames];
+        for (int i = 0; i < frames; i++) {
+            previewFrames[i] = new TextureRegion(texPreview, i * frameW, 0, frameW, frameH);
+        }
+        previewStateTime = 0f;
+
+        if (previewDrawable == null) previewDrawable = new TextureRegionDrawable(previewFrames[0]);
+        else previewDrawable.setRegion(previewFrames[0]);
+
+        if (imgPreview == null) imgPreview = new Image(previewDrawable);
+        else imgPreview.setDrawable(previewDrawable);
     }
 
     private void construirFondo() {
@@ -101,7 +178,6 @@ public class SeleccionPersonaje implements Screen {
 
         lblEsperando = new Label("Aguardando conexion...", skin);
         lblEsperando.setVisible(false);
-
 
         selGenero.addListener(new ChangeListener() {
             @Override public void changed(ChangeEvent event, com.badlogic.gdx.scenes.scene2d.Actor actor) {
@@ -178,81 +254,12 @@ public class SeleccionPersonaje implements Screen {
         stage.addActor(root);
     }
 
-    private String previewPath(Genero genero, Estilo estilo) {
-    String base = (genero == Genero.FEMENINO) ? "jugador_fem" : "jugador_masc";
-    int estiloNum = (estilo != null) ? (estilo.ordinal() + 1) : 1;
+    // Mensaje de espera
+    private Label lblEsperando;
 
-    String conEstilo = "Jugadores/" + base + estiloNum + "_quieto.png";
-    if (Gdx.files.internal(conEstilo).exists()) return conEstilo;
+    // Preview del personaje
+    private Texture texPreview;
 
-    String sinEstilo = "Jugadores/" + base + "_quieto.png";
-    return sinEstilo;
-}
-
-private void actualizarPreview(Genero genero, Estilo estilo) {
-    String path = previewPath(genero, estilo);
-
-    try {
-        if (texPreview != null) texPreview.dispose();
-    } catch (Exception ignored) {}
-
-    texPreview = new Texture(Gdx.files.internal(path));
-    texPreview.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-
-    // el *_quieto.png es un spritesheet (ej: 4 frames horizontal). Armamos frames automáticamente.
-    int frames = 4;
-    int frameW = texPreview.getWidth() / frames;
-    int frameH = texPreview.getHeight();
-    previewFrames = new TextureRegion[frames];
-    for (int i = 0; i < frames; i++) {
-        previewFrames[i] = new TextureRegion(texPreview, i * frameW, 0, frameW, frameH);
-    }
-    previewStateTime = 0f;
-
-    if (previewDrawable == null) previewDrawable = new TextureRegionDrawable(previewFrames[0]);
-    else previewDrawable.setRegion(previewFrames[0]);
-
-    if (imgPreview == null) imgPreview = new Image(previewDrawable);
-    else imgPreview.setDrawable(previewDrawable);
-}
-
-private void actualizarPreview() {
-    // fallback a lo que haya guardado en Principal
-    actualizarPreview(game.getGeneroSeleccionado(), game.getEstiloSeleccionado());
-}
-
-    @Override
-    public void render(float delta) {
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        // Animación idle del preview
-        if (imgPreview != null && previewFrames != null && previewFrames.length > 0) {
-            previewStateTime += delta;
-            int idx = (int) (previewStateTime / PREVIEW_FRAME_DURATION) % previewFrames.length;
-            if (previewDrawable != null) previewDrawable.setRegion(previewFrames[idx]);
-        }
-
-        stage.act(delta);
-        stage.draw();
-
-        // Si el usuario tocó Continuar, mostramos el mensaje al menos 1 frame antes de cambiar
-        if (esperandoConexion) {
-            esperandoTime += delta;
-            if (esperandoTime >= 0.15f) {
-                esperandoConexion = false;
-                game.cambiarPantalla(new JuegoPrincipal(game));
-            }
-        }
-    }
-
-    @Override public void resize(int width, int height) { stage.getViewport().update(width, height, true); }
-    @Override public void pause() {}
-    @Override public void resume() {}
-    @Override public void hide() {}
-    @Override public void dispose() {
-        if (stage != null) stage.dispose();
-        if (skin != null) skin.dispose();
-        if (texFondo != null) texFondo.dispose();
-        if (texPreview != null) texPreview.dispose();
-    }
+    // animación de quieto (preview)
+    private TextureRegion[] previewFrames;
 }

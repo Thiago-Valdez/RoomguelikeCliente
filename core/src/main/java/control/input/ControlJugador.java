@@ -4,21 +4,24 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.physics.box2d.Body;
+
 import entidades.personajes.Jugador;
 
 public class ControlJugador {
-
-    private final Jugador jugador;
-
-    private final int keyUp;
-    private final int keyDown;
-    private final int keyLeft;
-    private final int keyRight;
-
     private static boolean enPausa = false;  // Flag para la pausa
 
     // Evita allocaciones por frame
     private final Vector2 dir = new Vector2();
+
+    private final Jugador jugador;
+
+    private final int keyUp;
+
+    private final int keyDown;
+
+    private final int keyLeft;
+
+    private final int keyRight;
 
     public ControlJugador(Jugador jugador, int keyUp, int keyDown, int keyLeft, int keyRight) {
         this.jugador = jugador;
@@ -64,5 +67,4 @@ public class ControlJugador {
 
         cuerpo.setLinearVelocity(dir.x * velocidad, dir.y * velocidad);
     }
-
 }

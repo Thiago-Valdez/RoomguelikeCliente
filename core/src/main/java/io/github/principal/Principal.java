@@ -2,21 +2,23 @@ package io.github.principal;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Screen;
+
 import config.AudioManager;
 import config.Settings;
-import pantallas.MenuPrincipal;
-import entidades.datos.Genero;
+
 import entidades.datos.Estilo;
+import entidades.datos.Genero;
+
+import pantallas.MenuPrincipal;
 
 public class Principal extends Game {
-
     public Settings settings;
-    public AudioManager audio;
+
+    private Estilo estiloSeleccionado = Estilo.CLASICO;
+
     private boolean modoOnline = false;
 
-    // Apariencia elegida en menú
-    private Genero generoSeleccionado = Genero.MASCULINO;
-    private Estilo estiloSeleccionado = Estilo.CLASICO;
+    public AudioManager audio;
 
     @Override
     public void create() {
@@ -30,6 +32,25 @@ public class Principal extends Game {
         cambiarPantalla(new MenuPrincipal(this));
     }
 
+    @Override
+    public void dispose() {
+        if (audio != null) audio.dispose();
+    }
+
+    public Estilo getEstiloSeleccionado() { return estiloSeleccionado; }
+    public void setEstiloSeleccionado(Estilo estiloSeleccionado) {
+        if (estiloSeleccionado != null) this.estiloSeleccionado = estiloSeleccionado;
+    }
+
+    public Genero getGeneroSeleccionado() { return generoSeleccionado; }
+    public void setGeneroSeleccionado(Genero generoSeleccionado) {
+        if (generoSeleccionado != null) this.generoSeleccionado = generoSeleccionado;
+    }
+
+    public boolean isModoOnline() {
+        return modoOnline;
+    }
+
     public void aplicarSettings() {
         // Volumen
         audio.setMasterVolume(settings.getVolumen());
@@ -38,37 +59,20 @@ public class Principal extends Game {
         settings.aplicarResolucion();
     }
 
+    public void setModoOnline(boolean modoOnline) {
+        this.modoOnline = modoOnline;
+    }
+
     /**
-     * Cambia de pantalla y libera (dispose) la anterior.
-     * Importante: Game#setScreen NO dispone la pantalla anterior automáticamente.
-     */
+    * Cambia de pantalla y libera (dispose) la anterior.
+    * Importante: Game#setScreen NO dispone la pantalla anterior automáticamente.
+    */
     public void cambiarPantalla(Screen nueva) {
         Screen vieja = getScreen();
         setScreen(nueva);
         if (vieja != null) vieja.dispose();
     }
 
-    public boolean isModoOnline() {
-        return modoOnline;
-    }
-
-    public void setModoOnline(boolean modoOnline) {
-        this.modoOnline = modoOnline;
-    }
-
-    public Genero getGeneroSeleccionado() { return generoSeleccionado; }
-    public void setGeneroSeleccionado(Genero generoSeleccionado) {
-        if (generoSeleccionado != null) this.generoSeleccionado = generoSeleccionado;
-    }
-
-    public Estilo getEstiloSeleccionado() { return estiloSeleccionado; }
-    public void setEstiloSeleccionado(Estilo estiloSeleccionado) {
-        if (estiloSeleccionado != null) this.estiloSeleccionado = estiloSeleccionado;
-    }
-
-
-    @Override
-    public void dispose() {
-        if (audio != null) audio.dispose();
-    }
+    // Apariencia elegida en menú
+    private Genero generoSeleccionado = Genero.MASCULINO;
 }

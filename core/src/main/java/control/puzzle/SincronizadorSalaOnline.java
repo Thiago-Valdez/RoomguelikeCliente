@@ -3,11 +3,10 @@ package control.puzzle;
 import mapa.model.Habitacion;
 
 /**
- * En ONLINE, fuerza coherencia de estado por sala cuando cambia la sala global.
- * No cambia la lógica del puzzle: solo llama alEntrarASala() en el momento correcto.
- */
+* En ONLINE, fuerza coherencia de estado por sala cuando cambia la sala global.
+* No cambia la lógica del puzzle: solo llama alEntrarASala() en el momento correcto.
+*/
 public final class SincronizadorSalaOnline {
-
     private Habitacion ultimaSala = null;
 
     /** Llamar al aplicar un cambio de sala (UpdateRoom). */

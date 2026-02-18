@@ -19,45 +19,52 @@ import mapa.generacion.DisposicionMapa;
 import mapa.model.Habitacion;
 
 /**
- * Contexto del loop (update) de la partida.
- * Agrupa dependencias y colas para evitar firmas gigantes en los sistemas.
- *
- * NOTA: este contexto es mutable y se reutiliza cada frame.
- */
+* Contexto del loop (update) de la partida.
+* Agrupa dependencias y colas para evitar firmas gigantes en los sistemas.
+*
+* NOTA: este contexto es mutable y se reutiliza cada frame.
+*/
 public final class ContextoActualizacionPartida {
+    public TiledMap mapaTiled;
+
+    public boolean esOnline = true;
 
     public float delta;
 
-    // Estado actual
-    public Habitacion salaActual;
+    public BiConsumer<Habitacion, Habitacion> notificarCambioSala;
 
-    // Jugadores + input
-    public Jugador jugador1;
-    public Jugador jugador2;
     public ControlJugador controlJugador1;
+
     public ControlJugador controlJugador2;
+
+    public DisposicionMapa disposicion;
+
+    public GestorSalas gestorSalas;
+
+    public Jugador jugador2;
+
+    public Set<Integer> jugadoresDanioFrame;
+
+    public World world;
 
     // Cola unificada de eventos del juego
     public ColaEventos eventos;
 
-    // Helpers para dedupe por frame (se pueden mover a un sistema luego)
-    public Set<Item> itemsYaProcesados;
-    public Set<Integer> jugadoresDanioFrame;
-
-    // Visuales
-    public List<BotonVisual> botonesVisuales;
-
     // Dependencias de sala / mapa
     public ControlPuzzlePorSala controlPuzzle;
-    public GestorSalas gestorSalas;
-    public DisposicionMapa disposicion;
-    public BiConsumer<Habitacion, Habitacion> notificarCambioSala;
 
-    public TiledMap mapaTiled;
-    public World world;
+    // Estado actual
+    public Habitacion salaActual;
+
+    // Helpers para dedupe por frame (se pueden mover a un sistema luego)
+    public Set<Item> itemsYaProcesados;
+
+    // Jugadores + input
+    public Jugador jugador1;
 
     // Red (solo ONLINE)
     public RedPartidaCliente redPartida;
 
-    public boolean esOnline = true;
+    // Visuales
+    public List<BotonVisual> botonesVisuales;
 }

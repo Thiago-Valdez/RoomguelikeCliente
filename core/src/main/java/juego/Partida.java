@@ -70,196 +70,140 @@ import red.ClientThread;
 import red.RedPartidaCliente;
 
 public class Partida {
+    private static final int NIVEL_FINAL = 3;
 
-    private final Principal game;
-
-    // --- Mundo físico (único) ---
-    private World world;
-    private FisicaMundo fisica;
-
-    // --- Render ---
-    private SpriteBatch batch;
-    private ShapeRenderer shapeRendererMundo;
-    private ShapeRenderer debugRenderer = new ShapeRenderer();
-
-    // --- Mapa Tiled ---
-    private TiledMap mapaTiled;
-    private OrthogonalTiledMapRenderer mapaRenderer;
-
-    // --- Cámara ---
-    private CamaraDeSala camaraSala;
-
-    // --- Mapa lógico ---
-    private DisposicionMapa disposicion;
-    private Habitacion salaActual;
-    private ControlPuzzlePorSala controlPuzzle;
-
-    // --- Gestión ---
-    private GestorSalas gestorSalas;
-    private GestorDeEntidades gestorEntidades;
-
-    // --- Jugadores ---
-    private Jugador jugador1;
-    private Jugador jugador2;
-    private ControlJugador controlJugador1;
-    private ControlJugador controlJugador2;
-
-    // --- HUD ---
-    private HudJuego hud;
-    public List<Habitacion> salasDelPiso;
+    private SistemaSpritesEntidades sistemaSprites;
 
     private Stage pauseStage;
-    private Skin skin;
-    private boolean opcionesAbiertas = false;
-    private com.badlogic.gdx.InputProcessor inputAnterior;
-
-    // --- Listeners de cambio de sala (HUD, logs, etc.) ---
-    private final List<ListenerCambioSala> listenersCambioSala = new ArrayList<>();
-
-    // --- Cola unificada de eventos (evita modificar Box2D dentro del callback) ---
-    private final ColaEventos eventos = new ColaEventos();
-    private final Set<Item> itemsYaProcesados = new HashSet<>();
-    private final Set<Integer> jugadoresDanioFrame = new HashSet<>();
-
-    private final List<BotonVisual> botonesVisuales = new ArrayList<>();
-    private Texture texBotonRojo;
-    private Texture texBotonAzul;
-    private TextureRegion[][] framesBotonRojo;
-    private TextureRegion[][] framesBotonAzul;
-
-    private final List<PuertaVisual> puertasVisuales = new ArrayList<>();
-    private Texture texPuertaAbierta;
-    private Texture texPuertaCerrada;
-    private TextureRegion regPuertaAbierta;
-    private TextureRegion regPuertaCerrada;
-
-    private final control.puzzle.SincronizadorSalaOnline syncSalaOnline =
-        new control.puzzle.SincronizadorSalaOnline();
-
-
-    // Trampilla (visual)
-    private Texture texTrampilla;
-    private TextureRegion regTrampilla;
-
-    private Map<ItemTipo, TextureRegion> spritesItems = new HashMap<>();
-    private Map<ItemTipo, Texture> texturasItems = new HashMap<>();
 
     private boolean gameOverSolicitado = false;
 
-    private static final int NIVEL_FINAL = 3;
-    private boolean victoriaSolicitada = false;
+    private final Principal game;
 
-    // Persisten durante toda la run (NO se reinician entre niveles)
-    private Jugador jugador1Persistente;
-    private Jugador jugador2Persistente;
-    private boolean runInicializada = false;
-
-    // --- Sistemas (extraídos) ---
-    private final SistemaTransicionSala sistemaTransicionSala = new SistemaTransicionSala();
-    private final ProcesadorColasEventos procesadorColasEventos = new ProcesadorColasEventos();
-    private final SistemaFinNivel sistemaFinNivel = new SistemaFinNivel();
-
-    private SistemaSpritesEntidades sistemaSprites;
-    private SistemaActualizacionPartida sistemaActualizacion;
-    private final ContextoActualizacionPartida ctxUpdate = new ContextoActualizacionPartida();
     private CanalRenderizadoPartida canalRenderizado;
 
-    // --- Flags ---
-    private boolean debugFisica = true;
-    private int nivelActual = 1;
-
-    // =====================
-    // ✅ ONLINE SYNC (seed/nivel)
-    // =====================
-    private long seedActual = 0L;
-    private boolean esperandoStartOnline = false;
-
-    // =====================
-    // RED (cliente) - refactor
-    // =====================
-    private final RedPartidaCliente redPartida = new RedPartidaCliente();
     private ClientThread client; // guardo referencia para poder cerrarlo en dispose
 
     public Partida(Principal game) {
         this.game = game;
     }
 
+    private ControlJugador controlJugador1;
+
+    private ControlJugador controlJugador2;
+
+    private ControlPuzzlePorSala controlPuzzle;
+
+    private FisicaMundo fisica;
+
+    private GestorDeEntidades gestorEntidades;
+
+    private Habitacion salaActual;
+
+    private Jugador jugador2;
+
+    private Jugador jugador2Persistente;
+
+    private OrthogonalTiledMapRenderer mapaRenderer;
+
+    private ShapeRenderer shapeRendererMundo;
+
+    private SistemaActualizacionPartida sistemaActualizacion;
+
+    private Skin skin;
+
+    private Texture texBotonAzul;
+
+    private Texture texBotonRojo;
+
+    private Texture texPuertaAbierta;
+
+    private Texture texPuertaCerrada;
+
+    private TextureRegion regPuertaAbierta;
+
+    private TextureRegion regPuertaCerrada;
+
+    private TextureRegion regTrampilla;
+
+    private TextureRegion[][] framesBotonAzul;
+
+    private TextureRegion[][] framesBotonRojo;
+
+    private boolean esperandoStartOnline = false;
+
+    private boolean opcionesAbiertas = false;
+
+    private boolean runInicializada = false;
+
+    private boolean victoriaSolicitada = false;
+
+    private com.badlogic.gdx.InputProcessor inputAnterior;
+
+    private int nivelActual = 1;
+
+    public List<Habitacion> salasDelPiso;
+
     public RedPartidaCliente getRedController() {
         return redPartida;
     }
 
-    public void setClient(ClientThread client) {
-        this.client = client;
-        redPartida.setClient(client);
+    public boolean consumirGameOverSolicitado() {
+        if (!gameOverSolicitado) return false;
+        gameOverSolicitado = false;
+        return true;
     }
 
-    public void setModoOnline(boolean online) {
-        redPartida.setModoOnline(online);
-
-        if (!online) {
-            esperandoStartOnline = false;
-            seedActual = 0L;
-            ControlJugador.setPausa(false);
-        } else {
-            // online: hasta recibir Start no inicializamos mundo
-            esperandoStartOnline = true;
-        }
+    public boolean consumirVictoriaSolicitada() {
+        if (!victoriaSolicitada) return false;
+        victoriaSolicitada = false;
+        return true;
     }
 
-    public void startGame() {
-        nivelActual = 1;
+    public void dispose() {
+        if (opcionesAbiertas) cerrarOpciones();
 
-        if (redPartida.isModoOnline()) {
-            // ✅ ONLINE: esperamos Start:seed:nivel
-            esperandoStartOnline = true;
-            Gdx.app.log("NET", "startGame(): ONLINE -> esperando Start del server...");
-            return;
+        // ✅ cerrar red (thread y socket)
+        if (client != null) {
+            try { client.close(); } catch (Exception ignored) {}
+            client = null;
         }
 
-        // ✅ LOCAL: seed propia
-        seedActual = System.currentTimeMillis();
-        initNivel();
-    }
+        if (mapaRenderer != null) mapaRenderer.dispose();
+        if (mapaTiled != null) mapaTiled.dispose();
+        if (batch != null) batch.dispose();
+        if (shapeRendererMundo != null) shapeRendererMundo.dispose();
+        if (fisica != null) fisica.dispose();
+        if (hud != null) hud.dispose();
 
-    // ==========================
-    // EVENTOS: CAMBIO DE SALA
-    // ==========================
+        if (pauseStage != null) { pauseStage.dispose(); pauseStage = null; }
+        if (skin != null) { skin.dispose(); skin = null; }
 
-    public void agregarListenerCambioSala(ListenerCambioSala listener) {
-        if (listener != null && !listenersCambioSala.contains(listener)) {
-            listenersCambioSala.add(listener);
+        if (sistemaSprites != null) {
+            sistemaSprites.dispose();
         }
-    }
 
-    private void notificarCambioSala(Habitacion salaAnterior, Habitacion salaNueva) {
-        for (ListenerCambioSala listener : listenersCambioSala) {
-            listener.salaCambiada(salaAnterior, salaNueva);
+        if (texBotonRojo != null) texBotonRojo.dispose();
+        if (texBotonAzul != null) texBotonAzul.dispose();
+
+        if (texPuertaAbierta != null) texPuertaAbierta.dispose();
+        if (texPuertaCerrada != null) texPuertaCerrada.dispose();
+
+        if (texTrampilla != null) texTrampilla.dispose();
+
+        for (Texture t : texturasItems.values()) {
+            if (t != null) t.dispose();
         }
+        texturasItems.clear();
+        spritesItems.clear();
+
+        resetearEstadoNivel();
+        world = null;
     }
 
-    // ==========================
-    // INIT
-    // ==========================
-
-    private void resetearEstadoNivel() {
-        eventos.clear();
-        itemsYaProcesados.clear();
-        jugadoresDanioFrame.clear();
-
-        botonesVisuales.clear();
-        puertasVisuales.clear();
-
-        framesBotonRojo = null;
-        framesBotonAzul = null;
-    }
-
-    private void initRunSiHaceFalta() {
-        if (runInicializada) return;
-
-        jugador1Persistente = new Jugador(1, "J1", null, null);
-        jugador2Persistente = new Jugador(2, "J2", null, null);
-
-        runInicializada = true;
+    public void encolarDanioJugador(int jugadorId, float ex, float ey) {
+        if (jugadorId <= 0) return;
+        eventos.publicar(new EventoDanio(jugadorId, ex, ey));
     }
 
     public void initNivel() {
@@ -274,10 +218,10 @@ public class Partida {
 
         redPartida.setMundoListo(false);
         ContextoPartida ctx = InicializadorPartida.crearContextoNivel(
-            nivelActual,
-            seedActual,
-            j1,
-            j2
+        nivelActual,
+        seedActual,
+        j1,
+        j2
         );
         aplicarContexto(ctx);
 
@@ -290,7 +234,6 @@ public class Partida {
         // ✅ Mundo listo recién después de recrear World + bodies (evita crash nativo Box2D)
         redPartida.setMundoListo(true);
 
-
         // ✅ ONLINE: el cliente NO spawnea ni simula enemigos.
         // Los enemigos vienen por red (SpawnEnemy/UpdateEnemy) desde el server.
         if (redPartida.isModoOnline() && gestorEntidades != null) {
@@ -301,7 +244,6 @@ public class Partida {
         }
 
         ColisionesDesdeTiled.crearColisiones(mapaTiled, world);
-
 
         initOverlayOpciones();
 
@@ -331,24 +273,24 @@ public class Partida {
 
         // 5) Sistemas
         sistemaActualizacion = new SistemaActualizacionPartida(
-            gestorEntidades,
-            fisica,
-            camaraSala,
-            sistemaTransicionSala,
-            procesadorColasEventos,
-            sistemaSprites,
-            redPartida
+        gestorEntidades,
+        fisica,
+        camaraSala,
+        sistemaTransicionSala,
+        procesadorColasEventos,
+        sistemaSprites,
+        redPartida
         );
 
         canalRenderizado = new CanalRenderizadoPartida(
-            camaraSala,
-            mapaRenderer,
-            shapeRendererMundo,
-            batch,
-            fisica,
-            hud,
-            gestorEntidades,
-            sistemaSprites
+        camaraSala,
+        mapaRenderer,
+        shapeRendererMundo,
+        batch,
+        fisica,
+        hud,
+        gestorEntidades,
+        sistemaSprites
         );
 
         // 6) Contactos
@@ -371,151 +313,8 @@ public class Partida {
         Gdx.app.log("INIT", "Nivel " + nivelActual + " inicializado con seed=" + seedActual);
     }
 
-    private void cargarSpriteTrampilla() {
-        try {
-            texTrampilla = new Texture(Gdx.files.internal("Trampilla/trampilla.png"));
-            texTrampilla.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-            regTrampilla = new TextureRegion(texTrampilla);
-        } catch (Exception ex) {
-            texTrampilla = null;
-            regTrampilla = null;
-        }
-    }
-
-    private void aplicarContexto(ContextoPartida ctx) {
-        this.world = ctx.world;
-        this.fisica = ctx.fisica;
-
-        this.batch = ctx.batch;
-        this.shapeRendererMundo = ctx.shapeRendererMundo;
-
-        this.mapaTiled = ctx.mapaTiled;
-        this.mapaRenderer = ctx.mapaRenderer;
-
-        this.camaraSala = ctx.camaraSala;
-
-        this.disposicion = ctx.disposicion;
-        this.salaActual = ctx.salaActual;
-        this.controlPuzzle = ctx.controlPuzzle;
-        this.salasDelPiso = ctx.salasDelPiso;
-
-        this.gestorEntidades = ctx.gestorEntidades;
-        this.gestorSalas = ctx.gestorSalas;
-
-        this.jugador1 = ctx.jugador1;
-        this.jugador2 = ctx.jugador2;
-        this.controlJugador1 = ctx.controlJugador1;
-        this.controlJugador2 = ctx.controlJugador2;
-
-        this.hud = ctx.hud;
-
-        if (this.mapaTiled != null && this.world != null) {
-            ColisionesDesdeTiled.crearColisiones(this.mapaTiled, this.world);
-        } else {
-            Gdx.app.log("INIT", "NO colisiones: mapaTiled/world null en aplicarContexto()");
-        }
-    }
-
-    private void cargarSpritesBotones() {
-        texBotonRojo = new Texture(Gdx.files.internal("Botones/boton_rojo.png"));
-        texBotonAzul = new Texture(Gdx.files.internal("Botones/boton_azul.png"));
-
-        framesBotonRojo = TextureRegion.split(
-            texBotonRojo,
-            texBotonRojo.getWidth() / 2,
-            texBotonRojo.getHeight()
-        );
-
-        framesBotonAzul = TextureRegion.split(
-            texBotonAzul,
-            texBotonAzul.getWidth() / 2,
-            texBotonAzul.getHeight()
-        );
-
-        if (framesBotonRojo.length < 1 || framesBotonRojo[0].length < 2) {
-            throw new IllegalStateException("Spritesheet rojo inválido. Se esperaba 1x2 (UP/DOWN).");
-        }
-        if (framesBotonAzul.length < 1 || framesBotonAzul[0].length < 2) {
-            throw new IllegalStateException("Spritesheet azul inválido. Se esperaba 1x2 (UP/DOWN).");
-        }
-    }
-
-    private void cargarSpritesPuertas() {
-        texPuertaAbierta = new Texture(Gdx.files.internal("Puertas/puerta_abierta.png"));
-        texPuertaCerrada = new Texture(Gdx.files.internal("Puertas/puerta_cerrada.png"));
-
-        texPuertaAbierta.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        texPuertaCerrada.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-
-        regPuertaAbierta = new TextureRegion(texPuertaAbierta);
-        regPuertaCerrada = new TextureRegion(texPuertaCerrada);
-    }
-
-    private void cargarSpritesItems() {
-        for (ItemTipo tipo : ItemTipo.values()) {
-            String archivo = "items/" + tipo.name().toLowerCase() + ".png";
-            Gdx.app.log("ITEM_SPRITE", "Cargando: " + archivo);
-
-            Texture tex = new Texture(Gdx.files.internal(archivo));
-            tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-
-            texturasItems.put(tipo, tex);
-            spritesItems.put(tipo, new TextureRegion(tex));
-        }
-    }
-
-    // ==========================
-    // GETTERS mínimos
-    // ==========================
-
-    public Habitacion getSalaActual() { return salaActual; }
-    public SistemaTransicionSala getSistemaTransicionSala() { return sistemaTransicionSala; }
-    public ColaEventos getEventos() { return eventos; }
-
-    public void aplicarDanioPorEnemigo(Jugador jugador, Enemigo enemigo) {
-        if (jugador == null) return;
-        if (jugador.estaEnMuerte() || jugador.esInmune() || !jugador.estaViva()) return;
-
-        jugador.recibirDanio();
-
-        if (sistemaSprites != null) sistemaSprites.iniciarMuerte(jugador);
-
-        if (jugador.getCuerpoFisico() != null) {
-            jugador.getCuerpoFisico().setLinearVelocity(0f, 0f);
-        }
-    }
-
-    public void encolarDanioJugador(int jugadorId, float ex, float ey) {
-        if (jugadorId <= 0) return;
-        eventos.publicar(new EventoDanio(jugadorId, ex, ey));
-    }
-
-    // ==========================
-    // LOOP
-    // ==========================
-
-    private void prepararContextoActualizacion(float delta) {
-        ctxUpdate.delta = delta;
-        ctxUpdate.salaActual = salaActual;
-
-        ctxUpdate.jugador1 = jugador1;
-        ctxUpdate.jugador2 = jugador2;
-        ctxUpdate.controlJugador1 = controlJugador1;
-        ctxUpdate.controlJugador2 = controlJugador2;
-
-        ctxUpdate.eventos = eventos;
-        ctxUpdate.itemsYaProcesados = itemsYaProcesados;
-        ctxUpdate.jugadoresDanioFrame = jugadoresDanioFrame;
-
-        ctxUpdate.botonesVisuales = botonesVisuales;
-
-        ctxUpdate.controlPuzzle = controlPuzzle;
-        ctxUpdate.gestorSalas = gestorSalas;
-        ctxUpdate.disposicion = disposicion;
-        ctxUpdate.notificarCambioSala = this::notificarCambioSala;
-        ctxUpdate.mapaTiled = mapaTiled;
-        ctxUpdate.world = world;
-        ctxUpdate.redPartida = redPartida;
+    public void notificarGameOver() {
+        gameOverSolicitado = true;
     }
 
     public void render(float delta) {
@@ -531,9 +330,9 @@ public class Partida {
                 int h = Gdx.graphics.getHeight();
 
                 if (sistemaFinNivel != null) {
-                sistemaFinNivel.reset();
-            }
-            disposeNivel();
+                    sistemaFinNivel.reset();
+                }
+                disposeNivel();
                 initNivel();
 
                 // ✅ ONLINE: el HUD debe venir SIEMPRE del server.
@@ -588,7 +387,6 @@ public class Partida {
             notificarGameOver();
         }
 
-
         // ✅ MVP: mostrar vida del otro jugador (solo UI)
         if (redPartida.isModoOnline() && hud != null) {
             int oid = redPartida.getOtherPlayerId();
@@ -597,8 +395,7 @@ public class Partida {
             }
         }
 
-
-// ✅ ONLINE: aplicar cambio de sala enviado por el server
+        // ✅ ONLINE: aplicar cambio de sala enviado por el server
         if (redPartida.isModoOnline()) {
             String cambio = redPartida.consumirCambioSala(); // formato: DESTINO:DIR:PLAYER
             if (cambio != null && disposicion != null && salaActual != null) {
@@ -631,9 +428,6 @@ public class Partida {
             }
         }
         eventos.limpiar(EventoPuerta.class);
-
-
-
 
         canalRenderizado.setPuertasVisuales(puertasVisuales);
         sincronizarEstadoPuertasVisuales();
@@ -673,13 +467,13 @@ public class Partida {
 
         if (canalRenderizado != null) {
             canalRenderizado.render(
-                delta,
-                salaActual,
-                debugFisica,
-                jugador1,
-                jugador2,
-                botonesVisuales,
-                (sistemaFinNivel != null) ? sistemaFinNivel.getTrampillaVisual() : null
+            delta,
+            salaActual,
+            debugFisica,
+            jugador1,
+            jugador2,
+            botonesVisuales,
+            (sistemaFinNivel != null) ? sistemaFinNivel.getTrampillaVisual() : null
             );
         }
 
@@ -695,6 +489,100 @@ public class Partida {
         if (jugador1 != null) jugador1.resetAnimPos();
         if (jugador2 != null) jugador2.resetAnimPos();
         canalRenderizado.dibujarDebugBodies(camaraSala.getCamara(), debugRenderer, b1, b2);
+    }
+
+    public void setClient(ClientThread client) {
+        this.client = client;
+        redPartida.setClient(client);
+    }
+
+    public void setModoOnline(boolean online) {
+        redPartida.setModoOnline(online);
+
+        if (!online) {
+            esperandoStartOnline = false;
+            seedActual = 0L;
+            ControlJugador.setPausa(false);
+        } else {
+            // online: hasta recibir Start no inicializamos mundo
+            esperandoStartOnline = true;
+        }
+    }
+
+    public void startGame() {
+        nivelActual = 1;
+
+        if (redPartida.isModoOnline()) {
+            // ✅ ONLINE: esperamos Start:seed:nivel
+            esperandoStartOnline = true;
+            Gdx.app.log("NET", "startGame(): ONLINE -> esperando Start del server...");
+            return;
+        }
+
+        // ✅ LOCAL: seed propia
+        seedActual = System.currentTimeMillis();
+        initNivel();
+    }
+
+    private Map<ItemTipo, TextureRegion> spritesItems = new HashMap<>();
+
+    private final List<BotonVisual> botonesVisuales = new ArrayList<>();
+
+    private final List<PuertaVisual> puertasVisuales = new ArrayList<>();
+
+    private void abrirOpciones() {
+        if (opcionesAbiertas) return;
+        opcionesAbiertas = true;
+
+        inputAnterior = Gdx.input.getInputProcessor();
+
+        ControlJugador.setPausa(true);
+        Gdx.input.setInputProcessor(pauseStage);
+    }
+
+    private void actualizarGameOver(float delta) {
+        if (gameOverSolicitado) return;
+
+        boolean j1Muerto = (jugador1 != null && !jugador1.estaViva());
+        boolean j2Muerto = (jugador2 != null && !jugador2.estaViva());
+
+        if (j1Muerto || j2Muerto) {
+            gameOverSolicitado = true;
+        }
+    }
+
+    private void aplicarContexto(ContextoPartida ctx) {
+        this.world = ctx.world;
+        this.fisica = ctx.fisica;
+
+        this.batch = ctx.batch;
+        this.shapeRendererMundo = ctx.shapeRendererMundo;
+
+        this.mapaTiled = ctx.mapaTiled;
+        this.mapaRenderer = ctx.mapaRenderer;
+
+        this.camaraSala = ctx.camaraSala;
+
+        this.disposicion = ctx.disposicion;
+        this.salaActual = ctx.salaActual;
+        this.controlPuzzle = ctx.controlPuzzle;
+        this.salasDelPiso = ctx.salasDelPiso;
+
+        this.gestorEntidades = ctx.gestorEntidades;
+        this.gestorSalas = ctx.gestorSalas;
+
+        this.jugador1 = ctx.jugador1;
+        this.jugador2 = ctx.jugador2;
+        this.controlJugador1 = ctx.controlJugador1;
+        this.controlJugador2 = ctx.controlJugador2;
+
+        this.hud = ctx.hud;
+
+        if (this.mapaTiled != null && this.world != null) {
+            ColisionesDesdeTiled.crearColisiones(this.mapaTiled, this.world);
+        } else {
+            Gdx.app.log("INIT", "NO colisiones: mapaTiled/world null en aplicarContexto()");
+        }
     }
 
     private void avanzarAlSiguienteNivel() {
@@ -720,41 +608,63 @@ public class Partida {
         resize(w, h);
     }
 
-    private void initOverlayOpciones() {
-        pauseStage = new Stage(new ScreenViewport());
-        skin = new Skin(Gdx.files.internal("uiskin.json"));
-
-        Table fondo = new Table();
-        fondo.setFillParent(true);
-        fondo.setBackground(skin.newDrawable("white", 0, 0, 0, 0.6f));
-        fondo.center();
-
-        OpcionesPanel panel = new OpcionesPanel(game, skin);
-
-        TextButton cerrar = new TextButton("Cerrar", skin);
-        cerrar.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ClickListener() {
-            @Override
-            public void clicked(com.badlogic.gdx.scenes.scene2d.InputEvent event, float x, float y) {
-                cerrarOpciones();
-            }
-        });
-
-        Table contenedor = new Table();
-        contenedor.add(panel.getRoot()).padBottom(20).row();
-        contenedor.add(cerrar).width(220).height(55);
-
-        fondo.add(contenedor);
-        pauseStage.addActor(fondo);
+    private void cargarSpriteTrampilla() {
+        try {
+            texTrampilla = new Texture(Gdx.files.internal("Trampilla/trampilla.png"));
+            texTrampilla.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            regTrampilla = new TextureRegion(texTrampilla);
+        } catch (Exception ex) {
+            texTrampilla = null;
+            regTrampilla = null;
+        }
     }
 
-    private void abrirOpciones() {
-        if (opcionesAbiertas) return;
-        opcionesAbiertas = true;
+    private void cargarSpritesBotones() {
+        texBotonRojo = new Texture(Gdx.files.internal("Botones/boton_rojo.png"));
+        texBotonAzul = new Texture(Gdx.files.internal("Botones/boton_azul.png"));
 
-        inputAnterior = Gdx.input.getInputProcessor();
+        framesBotonRojo = TextureRegion.split(
+        texBotonRojo,
+        texBotonRojo.getWidth() / 2,
+        texBotonRojo.getHeight()
+        );
 
-        ControlJugador.setPausa(true);
-        Gdx.input.setInputProcessor(pauseStage);
+        framesBotonAzul = TextureRegion.split(
+        texBotonAzul,
+        texBotonAzul.getWidth() / 2,
+        texBotonAzul.getHeight()
+        );
+
+        if (framesBotonRojo.length < 1 || framesBotonRojo[0].length < 2) {
+            throw new IllegalStateException("Spritesheet rojo inválido. Se esperaba 1x2 (UP/DOWN).");
+        }
+        if (framesBotonAzul.length < 1 || framesBotonAzul[0].length < 2) {
+            throw new IllegalStateException("Spritesheet azul inválido. Se esperaba 1x2 (UP/DOWN).");
+        }
+    }
+
+    private void cargarSpritesItems() {
+        for (ItemTipo tipo : ItemTipo.values()) {
+            String archivo = "items/" + tipo.name().toLowerCase() + ".png";
+            Gdx.app.log("ITEM_SPRITE", "Cargando: " + archivo);
+
+            Texture tex = new Texture(Gdx.files.internal(archivo));
+            tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
+            texturasItems.put(tipo, tex);
+            spritesItems.put(tipo, new TextureRegion(tex));
+        }
+    }
+
+    private void cargarSpritesPuertas() {
+        texPuertaAbierta = new Texture(Gdx.files.internal("Puertas/puerta_abierta.png"));
+        texPuertaCerrada = new Texture(Gdx.files.internal("Puertas/puerta_cerrada.png"));
+
+        texPuertaAbierta.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        texPuertaCerrada.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+
+        regPuertaAbierta = new TextureRegion(texPuertaAbierta);
+        regPuertaCerrada = new TextureRegion(texPuertaCerrada);
     }
 
     private void cerrarOpciones() {
@@ -769,57 +679,6 @@ public class Partida {
         } else {
             Gdx.input.setInputProcessor(null);
         }
-    }
-
-    // ==========================
-    // LIFECYCLE
-    // ==========================
-
-    public void resize(int width, int height) {
-        if (camaraSala != null) camaraSala.getViewport().update(width, height, true);
-        if (hud != null) hud.resize(width, height);
-        if (pauseStage != null) pauseStage.getViewport().update(width, height, true);
-    }
-
-    public void dispose() {
-        if (opcionesAbiertas) cerrarOpciones();
-
-        // ✅ cerrar red (thread y socket)
-        if (client != null) {
-            try { client.close(); } catch (Exception ignored) {}
-            client = null;
-        }
-
-        if (mapaRenderer != null) mapaRenderer.dispose();
-        if (mapaTiled != null) mapaTiled.dispose();
-        if (batch != null) batch.dispose();
-        if (shapeRendererMundo != null) shapeRendererMundo.dispose();
-        if (fisica != null) fisica.dispose();
-        if (hud != null) hud.dispose();
-
-        if (pauseStage != null) { pauseStage.dispose(); pauseStage = null; }
-        if (skin != null) { skin.dispose(); skin = null; }
-
-        if (sistemaSprites != null) {
-            sistemaSprites.dispose();
-        }
-
-        if (texBotonRojo != null) texBotonRojo.dispose();
-        if (texBotonAzul != null) texBotonAzul.dispose();
-
-        if (texPuertaAbierta != null) texPuertaAbierta.dispose();
-        if (texPuertaCerrada != null) texPuertaCerrada.dispose();
-
-        if (texTrampilla != null) texTrampilla.dispose();
-
-        for (Texture t : texturasItems.values()) {
-            if (t != null) t.dispose();
-        }
-        texturasItems.clear();
-        spritesItems.clear();
-
-        resetearEstadoNivel();
-        world = null;
     }
 
     private void disposeNivel() {
@@ -864,6 +723,67 @@ public class Partida {
         resetearEstadoNivel();
     }
 
+    private void initOverlayOpciones() {
+        pauseStage = new Stage(new ScreenViewport());
+        skin = new Skin(Gdx.files.internal("uiskin.json"));
+
+        Table fondo = new Table();
+        fondo.setFillParent(true);
+        fondo.setBackground(skin.newDrawable("white", 0, 0, 0, 0.6f));
+        fondo.center();
+
+        OpcionesPanel panel = new OpcionesPanel(game, skin);
+
+        TextButton cerrar = new TextButton("Cerrar", skin);
+        cerrar.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ClickListener() {
+            @Override
+            public void clicked(com.badlogic.gdx.scenes.scene2d.InputEvent event, float x, float y) {
+                cerrarOpciones();
+            }
+        });
+
+        Table contenedor = new Table();
+        contenedor.add(panel.getRoot()).padBottom(20).row();
+        contenedor.add(cerrar).width(220).height(55);
+
+        fondo.add(contenedor);
+        pauseStage.addActor(fondo);
+    }
+
+    private void initRunSiHaceFalta() {
+        if (runInicializada) return;
+
+        jugador1Persistente = new Jugador(1, "J1", null, null);
+        jugador2Persistente = new Jugador(2, "J2", null, null);
+
+        runInicializada = true;
+    }
+
+    private void notificarCambioSala(Habitacion salaAnterior, Habitacion salaNueva) {
+        for (ListenerCambioSala listener : listenersCambioSala) {
+            listener.salaCambiada(salaAnterior, salaNueva);
+        }
+    }
+
+    private void registrarSpritesItemsNuevos() {
+        for (Item item : gestorEntidades.getItemsMundo()) {
+            if (item == null) continue;
+            if (sistemaSprites.tieneItemRegistrado(item)) continue;
+
+            TextureRegion region = spritesItems.get(item.getTipo());
+            if (region == null) continue;
+
+            sistemaSprites.registrarItem(
+            item,
+            region,
+            16f,
+            16f,
+            0f,
+            0f
+            );
+        }
+    }
+
     private void sincronizarEstadoPuertasVisuales() {
         if (controlPuzzle == null || salaActual == null) return;
 
@@ -884,49 +804,143 @@ public class Partida {
         }
     }
 
-    private void registrarSpritesItemsNuevos() {
-        for (Item item : gestorEntidades.getItemsMundo()) {
-            if (item == null) continue;
-            if (sistemaSprites.tieneItemRegistrado(item)) continue;
+    private Map<ItemTipo, Texture> texturasItems = new HashMap<>();
 
-            TextureRegion region = spritesItems.get(item.getTipo());
-            if (region == null) continue;
+    private ShapeRenderer debugRenderer = new ShapeRenderer();
 
-            sistemaSprites.registrarItem(
-                item,
-                region,
-                16f,
-                16f,
-                0f,
-                0f
-            );
+    private final ContextoActualizacionPartida ctxUpdate = new ContextoActualizacionPartida();
+
+    private final ProcesadorColasEventos procesadorColasEventos = new ProcesadorColasEventos();
+
+    private final Set<Integer> jugadoresDanioFrame = new HashSet<>();
+
+    private final Set<Item> itemsYaProcesados = new HashSet<>();
+
+    private final SistemaFinNivel sistemaFinNivel = new SistemaFinNivel();
+
+    // --- Cola unificada de eventos (evita modificar Box2D dentro del callback) ---
+    private final ColaEventos eventos = new ColaEventos();
+
+    // --- Cámara ---
+    private CamaraDeSala camaraSala;
+
+    // --- Flags ---
+    private boolean debugFisica = true;
+
+    // --- Gestión ---
+    private GestorSalas gestorSalas;
+
+    // --- HUD ---
+    private HudJuego hud;
+
+    // --- Jugadores ---
+    private Jugador jugador1;
+
+    // --- Listeners de cambio de sala (HUD, logs, etc.) ---
+    private final List<ListenerCambioSala> listenersCambioSala = new ArrayList<>();
+
+    // --- Mapa Tiled ---
+    private TiledMap mapaTiled;
+
+    // --- Mapa lógico ---
+    private DisposicionMapa disposicion;
+
+    // --- Mundo físico (único) ---
+    private World world;
+
+    // --- Render ---
+    private SpriteBatch batch;
+
+    // --- Sistemas (extraídos) ---
+    private final SistemaTransicionSala sistemaTransicionSala = new SistemaTransicionSala();
+
+    // EVENTOS: CAMBIO DE SALA
+
+    public void agregarListenerCambioSala(ListenerCambioSala listener) {
+        if (listener != null && !listenersCambioSala.contains(listener)) {
+            listenersCambioSala.add(listener);
         }
     }
 
-    public void notificarGameOver() {
-        gameOverSolicitado = true;
-    }
+    // GETTERS mínimos
 
-    public boolean consumirGameOverSolicitado() {
-        if (!gameOverSolicitado) return false;
-        gameOverSolicitado = false;
-        return true;
-    }
+    public Habitacion getSalaActual() { return salaActual; }
+    public SistemaTransicionSala getSistemaTransicionSala() { return sistemaTransicionSala; }
+    public ColaEventos getEventos() { return eventos; }
 
-    private void actualizarGameOver(float delta) {
-        if (gameOverSolicitado) return;
+    public void aplicarDanioPorEnemigo(Jugador jugador, Enemigo enemigo) {
+        if (jugador == null) return;
+        if (jugador.estaEnMuerte() || jugador.esInmune() || !jugador.estaViva()) return;
 
-        boolean j1Muerto = (jugador1 != null && !jugador1.estaViva());
-        boolean j2Muerto = (jugador2 != null && !jugador2.estaViva());
+        jugador.recibirDanio();
 
-        if (j1Muerto || j2Muerto) {
-            gameOverSolicitado = true;
+        if (sistemaSprites != null) sistemaSprites.iniciarMuerte(jugador);
+
+        if (jugador.getCuerpoFisico() != null) {
+            jugador.getCuerpoFisico().setLinearVelocity(0f, 0f);
         }
     }
 
-    public boolean consumirVictoriaSolicitada() {
-        if (!victoriaSolicitada) return false;
-        victoriaSolicitada = false;
-        return true;
+    // INIT
+
+    private void resetearEstadoNivel() {
+        eventos.clear();
+        itemsYaProcesados.clear();
+        jugadoresDanioFrame.clear();
+
+        botonesVisuales.clear();
+        puertasVisuales.clear();
+
+        framesBotonRojo = null;
+        framesBotonAzul = null;
     }
+
+    // LIFECYCLE
+
+    public void resize(int width, int height) {
+        if (camaraSala != null) camaraSala.getViewport().update(width, height, true);
+        if (hud != null) hud.resize(width, height);
+        if (pauseStage != null) pauseStage.getViewport().update(width, height, true);
+    }
+
+    // LOOP
+
+    private void prepararContextoActualizacion(float delta) {
+        ctxUpdate.delta = delta;
+        ctxUpdate.salaActual = salaActual;
+
+        ctxUpdate.jugador1 = jugador1;
+        ctxUpdate.jugador2 = jugador2;
+        ctxUpdate.controlJugador1 = controlJugador1;
+        ctxUpdate.controlJugador2 = controlJugador2;
+
+        ctxUpdate.eventos = eventos;
+        ctxUpdate.itemsYaProcesados = itemsYaProcesados;
+        ctxUpdate.jugadoresDanioFrame = jugadoresDanioFrame;
+
+        ctxUpdate.botonesVisuales = botonesVisuales;
+
+        ctxUpdate.controlPuzzle = controlPuzzle;
+        ctxUpdate.gestorSalas = gestorSalas;
+        ctxUpdate.disposicion = disposicion;
+        ctxUpdate.notificarCambioSala = this::notificarCambioSala;
+        ctxUpdate.mapaTiled = mapaTiled;
+        ctxUpdate.world = world;
+        ctxUpdate.redPartida = redPartida;
+    }
+
+    // Persisten durante toda la run (NO se reinician entre niveles)
+    private Jugador jugador1Persistente;
+
+    // RED (cliente) - refactor
+    private final RedPartidaCliente redPartida = new RedPartidaCliente();
+
+    // Trampilla (visual)
+    private Texture texTrampilla;
+
+    // ✅ ONLINE SYNC (seed/nivel)
+    private long seedActual = 0L;
+
+    private final control.puzzle.SincronizadorSalaOnline syncSalaOnline =
+    new control.puzzle.SincronizadorSalaOnline();
 }

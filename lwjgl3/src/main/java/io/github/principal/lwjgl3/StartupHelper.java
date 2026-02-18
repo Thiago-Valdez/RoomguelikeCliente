@@ -1,23 +1,24 @@
 /*
- * Copyright 2020 damios
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at:
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+* Copyright 2020 damios
+*
+* Licensed under the Apache License, Version 2.0 (the "License");
+* you may not use this file except in compliance with the License.
+* You may obtain a copy of the License at:
+* https://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing, software
+* distributed under the License is distributed on an "AS IS" BASIS,
+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+* See the License for the specific language governing permissions and
+* limitations under the License.
+*/
 //Note, the above license and copyright applies to this file only.
 
 package io.github.principal.lwjgl3;
 
 import com.badlogic.gdx.Version;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3NativesLoader;
+
 import org.lwjgl.system.macosx.LibC;
 import org.lwjgl.system.macosx.ObjCRuntime;
 
@@ -33,14 +34,14 @@ import static org.lwjgl.system.macosx.ObjCRuntime.objc_getClass;
 import static org.lwjgl.system.macosx.ObjCRuntime.sel_getUid;
 
 /**
- * Adds some utilities to ensure that the JVM was started with the
- * {@code -XstartOnFirstThread} argument, which is required on macOS for LWJGL 3
- * to function. Also helps on Windows when users have names with characters from
- * outside the Latin alphabet, a common cause of startup crashes.
- * <br>
- * <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based on this java-gaming.org post by kappa</a>
- * @author damios
- */
+* Adds some utilities to ensure that the JVM was started with the
+* {@code -XstartOnFirstThread} argument, which is required on macOS for LWJGL 3
+* to function. Also helps on Windows when users have names with characters from
+* outside the Latin alphabet, a common cause of startup crashes.
+* <br>
+* <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based on this java-gaming.org post by kappa</a>
+* @author damios
+*/
 public class StartupHelper {
 
     private static final String JVM_RESTARTED_ARG = "jvmIsRestarted";
@@ -50,39 +51,39 @@ public class StartupHelper {
     }
 
     /**
-     * Starts a new JVM if the application was started on macOS without the
-     * {@code -XstartOnFirstThread} argument. This also includes some code for
-     * Windows, for the case where the user's home directory includes certain
-     * non-Latin-alphabet characters (without this code, most LWJGL3 apps fail
-     * immediately for those users). Returns whether a new JVM was started and
-     * thus no code should be executed.
-     * <p>
-     * <u>Usage:</u>
-     *
-     * <pre><code>
-     * public static void main(String... args) {
-     * 	if (StartupHelper.startNewJvmIfRequired(true)) return; // This handles macOS support and helps on Windows.
-     * 	// after this is the actual main method code
-     * }
-     * </code></pre>
-     *
-     * @param redirectOutput
-     *            whether the output of the new JVM should be rerouted to the
-     *            old JVM, so it can be accessed in the same place; keeps the
-     *            old JVM running if enabled
-     * @return whether a new JVM was started and thus no code should be executed
-     *         in this one
-     */
+    * Starts a new JVM if the application was started on macOS without the
+    * {@code -XstartOnFirstThread} argument. This also includes some code for
+    * Windows, for the case where the user's home directory includes certain
+    * non-Latin-alphabet characters (without this code, most LWJGL3 apps fail
+    * immediately for those users). Returns whether a new JVM was started and
+    * thus no code should be executed.
+    * <p>
+    * <u>Usage:</u>
+    *
+    * <pre><code>
+    * public static void main(String... args) {
+    *     if (StartupHelper.startNewJvmIfRequired(true)) return; // This handles macOS support and helps on Windows.
+    *     // after this is the actual main method code
+    * }
+    * </code></pre>
+    *
+    * @param redirectOutput
+    *            whether the output of the new JVM should be rerouted to the
+    *            old JVM, so it can be accessed in the same place; keeps the
+    *            old JVM running if enabled
+    * @return whether a new JVM was started and thus no code should be executed
+    *         in this one
+    */
     public static boolean startNewJvmIfRequired(boolean redirectOutput) {
         String osName = System.getProperty("os.name").toLowerCase();
         if (!osName.contains("mac")) {
             if (osName.contains("windows")) {
-// Here, we are trying to work around an issue with how LWJGL3 loads its extracted .dll files.
-// By default, LWJGL3 extracts to the directory specified by "java.io.tmpdir", which is usually the user's home.
-// If the user's name has non-ASCII (or some non-alphanumeric) characters in it, that would fail.
-// By extracting to the relevant "ProgramData" folder, which is usually "C:\ProgramData", we avoid this.
-// We also temporarily change the "user.name" property to one without any chars that would be invalid.
-// We revert our changes immediately after loading LWJGL3 natives.
+                // Here, we are trying to work around an issue with how LWJGL3 loads its extracted .dll files.
+                // By default, LWJGL3 extracts to the directory specified by "java.io.tmpdir", which is usually the user's home.
+                // If the user's name has non-ASCII (or some non-alphanumeric) characters in it, that would fail.
+                // By extracting to the relevant "ProgramData" folder, which is usually "C:\ProgramData", we avoid this.
+                // We also temporarily change the "user.name" property to one without any chars that would be invalid.
+                // We revert our changes immediately after loading LWJGL3 natives.
                 String programData = System.getenv("ProgramData");
                 if(programData == null) programData = "C:\\Temp\\"; // if ProgramData isn't set, try some fallback.
                 String prevTmpDir = System.getProperty("java.io.tmpdir", programData);
@@ -119,7 +120,7 @@ public class StartupHelper {
         // avoids looping, but most certainly leads to a crash
         if ("true".equals(System.getProperty(JVM_RESTARTED_ARG))) {
             System.err.println(
-                    "There was a problem evaluating whether the JVM was started with the -XstartOnFirstThread argument.");
+            "There was a problem evaluating whether the JVM was started with the -XstartOnFirstThread argument.");
             return false;
         }
 
@@ -133,7 +134,7 @@ public class StartupHelper {
 
         if (!(new File(javaExecPath)).exists()) {
             System.err.println(
-                    "A Java installation could not be found. If you are distributing this app with a bundled JRE, be sure to set the -XstartOnFirstThread argument manually!");
+            "A Java installation could not be found. If you are distributing this app with a bundled JRE, be sure to set the -XstartOnFirstThread argument manually!");
             return false;
         }
 
@@ -161,9 +162,9 @@ public class StartupHelper {
                 processBuilder.start();
             } else {
                 Process process = (new ProcessBuilder(jvmArgs))
-                        .redirectErrorStream(true).start();
+                .redirectErrorStream(true).start();
                 BufferedReader processOutput = new BufferedReader(
-                        new InputStreamReader(process.getInputStream()));
+                new InputStreamReader(process.getInputStream()));
                 String line;
 
                 while ((line = processOutput.readLine()) != null) {
@@ -181,23 +182,23 @@ public class StartupHelper {
     }
 
     /**
-     * Starts a new JVM if the application was started on macOS without the
-     * {@code -XstartOnFirstThread} argument. Returns whether a new JVM was
-     * started and thus no code should be executed. Redirects the output of the
-     * new JVM to the old one.
-     * <p>
-     * <u>Usage:</u>
-     *
-     * <pre>
-     * public static void main(String... args) {
-     * 	if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
-     * 	// the actual main method code
-     * }
-     * </pre>
-     *
-     * @return whether a new JVM was started and thus no code should be executed
-     *         in this one
-     */
+    * Starts a new JVM if the application was started on macOS without the
+    * {@code -XstartOnFirstThread} argument. Returns whether a new JVM was
+    * started and thus no code should be executed. Redirects the output of the
+    * new JVM to the old one.
+    * <p>
+    * <u>Usage:</u>
+    *
+    * <pre>
+    * public static void main(String... args) {
+    *     if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
+    *     // the actual main method code
+    * }
+    * </pre>
+    *
+    * @return whether a new JVM was started and thus no code should be executed
+    *         in this one
+    */
     public static boolean startNewJvmIfRequired() {
         return startNewJvmIfRequired(true);
     }

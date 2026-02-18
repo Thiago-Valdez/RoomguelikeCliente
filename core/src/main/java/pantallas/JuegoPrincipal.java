@@ -8,15 +8,48 @@ import red.ClientThread;
 import red.RedPartidaCliente;
 
 public class JuegoPrincipal implements Screen {
-
-    private final Principal game;
-    private Partida partida;
-
-    // ✅ red
     private ClientThread client;
 
-    public JuegoPrincipal(Principal game) {
-        this.game = game;
+    private final Principal game;
+
+    private Partida partida;
+
+    @Override
+    public void dispose() {
+        cerrarRed();
+        if (partida != null) {
+            partida.dispose();
+            partida = null;
+        }
+    }
+
+    @Override public void pause() {}
+    @Override public void resume() {}
+
+    @Override
+    public void hide() {
+        cerrarRed();
+    }
+
+    @Override
+    public void render(float delta) {
+        partida.render(delta);
+
+        if (partida.consumirVictoriaSolicitada()) {
+            cerrarRed();
+            game.cambiarPantalla(new PantallaGanaste(game));
+            return;
+        }
+
+        if (partida.consumirGameOverSolicitado()) {
+            cerrarRed();
+            game.cambiarPantalla(new PantallaGameOver(game));
+        }
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        if (partida != null) partida.resize(width, height);
     }
 
     @Override
@@ -64,51 +97,21 @@ public class JuegoPrincipal implements Screen {
         partida.startGame();
     }
 
-
-
-
-    @Override
-    public void render(float delta) {
-        partida.render(delta);
-
-        if (partida.consumirVictoriaSolicitada()) {
-            cerrarRed();
-            game.cambiarPantalla(new PantallaGanaste(game));
-            return;
-        }
-
-        if (partida.consumirGameOverSolicitado()) {
-            cerrarRed();
-            game.cambiarPantalla(new PantallaGameOver(game));
-        }
+    public JuegoPrincipal(Principal game) {
+        this.game = game;
     }
 
     private void cerrarRed() {
         if (client != null) {
-            client.close();
+            ClientThread c = client;
             client = null;
+            c.close();
+
+            try {
+                c.join(500);
+            } catch (InterruptedException ignored) {
+            }
         }
     }
 
-    @Override
-    public void resize(int width, int height) {
-        if (partida != null) partida.resize(width, height);
-    }
-
-    @Override public void pause() {}
-    @Override public void resume() {}
-
-    @Override
-    public void hide() {
-        cerrarRed();
-    }
-
-    @Override
-    public void dispose() {
-        cerrarRed();
-        if (partida != null) {
-            partida.dispose();
-            partida = null;
-        }
-    }
 }
