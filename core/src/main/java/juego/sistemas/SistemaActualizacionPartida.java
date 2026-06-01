@@ -19,36 +19,23 @@ import mapa.model.Habitacion;
 import red.RedPartidaCliente;
 
 /**
- * Agrupa el update del gameplay (sin render).
- * Mantiene a Partida como un orquestador chico y legible.
- */
+* Agrupa el update del gameplay (sin render).
+* Mantiene a Partida como un orquestador chico y legible.
+*/
 public final class SistemaActualizacionPartida {
-
     private final GestorDeEntidades gestorEntidades;
-    private final FisicaMundo fisica;
-    private final CamaraDeSala camaraSala;
-    private final SistemaTransicionSala transicionSala;
-    private final ProcesadorColasEventos procesadorEventos;
-    private final SistemaSpritesEntidades sprites;
 
     private final RedPartidaCliente red;
-    public SistemaActualizacionPartida(
-            GestorDeEntidades gestorEntidades,
-            FisicaMundo fisica,
-            CamaraDeSala camaraSala,
-            SistemaTransicionSala transicionSala,
-            ProcesadorColasEventos procesadorEventos,
-            SistemaSpritesEntidades sprites,
-            RedPartidaCliente red
-    ) {
-        this.gestorEntidades = gestorEntidades;
-        this.fisica = fisica;
-        this.camaraSala = camaraSala;
-        this.transicionSala = transicionSala;
-        this.procesadorEventos = procesadorEventos;
-        this.sprites = sprites;
-        this.red = red;
-    }
+
+    private final CamaraDeSala camaraSala;
+
+    private final FisicaMundo fisica;
+
+    private final ProcesadorColasEventos procesadorEventos;
+
+    private final SistemaSpritesEntidades sprites;
+
+    private final SistemaTransicionSala transicionSala;
 
     public Habitacion actualizar(ContextoActualizacionPartida ctx) {
         if (ctx == null) return null;
@@ -73,7 +60,6 @@ public final class SistemaActualizacionPartida {
         var world = ctx.world;
         RedPartidaCliente redPartida = ctx.redPartida;
 
-
         ControlPuzzlePorSala controlPuzzle = ctx.controlPuzzle;
         DisposicionMapa disposicion = ctx.disposicion;
         var notificarCambioSala = ctx.notificarCambioSala;
@@ -82,60 +68,48 @@ public final class SistemaActualizacionPartida {
 
         final boolean esOnline = ctx.esOnline;
 
-        // =========================
         // 1) lógica pura (LOCAL)
-        // =========================
         if (!esOnline) {
             gestorEntidades.actualizar(delta, salaActual);
         }
 
-        // =========================
         // 2) input (LOCAL)
-        // =========================
         if (!esOnline) {
             actualizarControles(delta, controlJugador1, controlJugador2);
         }
 
-        // =========================
         // 3) IA enemigos (LOCAL)
-        // =========================
         if (!esOnline) {
             gestorEntidades.actualizarEnemigos(delta, jugador1, jugador2);
         }
 
-        // =========================
         // 4) físicas
-        // =========================
         // En ONLINE idealmente NO hacés step si el server manda posiciones.
         // Pero si tu render/otros sistemas dependen de step (por ejemplo timers/fixtures),
         // lo podés dejar. Yo te lo dejo prendido pero con delta clamp para evitar explosiones.
         float stepDelta = Math.min(delta, 1f / 30f);
         fisica.step(stepDelta);
 
-        // =========================
         // 5) EVENTOS (LOCAL)
-        // =========================
 
-        // =========================
         // 5.A) PUERTAS (OFFLINE y ONLINE)
-        // =========================
         if (transicionSala != null) {
             transicionSala.tickCooldown();
         }
         if (transicionSala != null && eventos != null && gestorSalas != null && disposicion != null) {
             salaActual = transicionSala.procesarPuertasPendientes(
-                salaActual,
-                eventos,
-                controlPuzzle,
-                gestorSalas,
-                disposicion,
-                notificarCambioSala,
-                mapaTiled,
-                world,
-                gestorEntidades,
-                sprites,
-                esOnline,
-                redPartida
+            salaActual,
+            eventos,
+            controlPuzzle,
+            gestorSalas,
+            disposicion,
+            notificarCambioSala,
+            mapaTiled,
+            world,
+            gestorEntidades,
+            sprites,
+            esOnline,
+            redPartida
             );
         }
 
@@ -143,34 +117,34 @@ public final class SistemaActualizacionPartida {
 
             // 🔘 BOTONES: SIEMPRE (offline y online)
             Consumer<Habitacion> matarEnemigos =
-                (!esOnline && sprites != null)
-                    ? sprites::matarEnemigosDeSalaConAnim
-                    : (esOnline && red != null)
-                        ? (s) -> red.enviarRoomClearReq(s)
-                        : null;
+            (!esOnline && sprites != null)
+            ? sprites::matarEnemigosDeSalaConAnim
+            : (esOnline && red != null)
+            ? (s) -> red.enviarRoomClearReq(s)
+            : null;
 
             procesadorEventos.procesarBotonesPendientes(
-                eventos,
-                salaActual,
-                controlPuzzle,
-                matarEnemigos,
-                botonesVisuales
+            eventos,
+            salaActual,
+            controlPuzzle,
+            matarEnemigos,
+            botonesVisuales
             );
 
             if (!esOnline) {
                 // 📦 ITEMS: SOLO OFFLINE
                 procesadorEventos.procesarItemsPendientes(
-                    eventos,
-                    itemsYaProcesados,
-                    gestorEntidades
+                eventos,
+                itemsYaProcesados,
+                gestorEntidades
                 );
 
                 // 💥 DAÑO LOCAL
                 procesadorEventos.procesarDaniosPendientes(
-                    eventos,
-                    jugadoresDanioFrame,
-                    gestorEntidades,
-                    sprites
+                eventos,
+                jugadoresDanioFrame,
+                gestorEntidades,
+                sprites
                 );
             } else {
                 // ONLINE: limpiamos lo que NO debe existir
@@ -187,19 +161,14 @@ public final class SistemaActualizacionPartida {
             }
         }
 
-
-        // =========================
         // 6) estado jugadores
-        // =========================
         // En ONLINE, si el server maneja vida/inmunidad/etc, no lo corras acá.
         // Si de momento no lo sincronizás por red, podés dejarlo solo en local.
         if (!esOnline) {
             actualizarJugadores(delta, jugador1, jugador2);
         }
 
-        // =========================
         // 7) sprites
-        // =========================
 
         if (sprites != null) {
             sprites.actualizarAnimJugadores(delta);
@@ -209,19 +178,13 @@ public final class SistemaActualizacionPartida {
             sprites.limpiarSpritesDeEntidadesMuertas();
         }
 
-        // =========================
         // 8) cámara
-        // =========================
         if (camaraSala != null) {
             camaraSala.update(delta);
         }
 
         return salaActual;
     }
-
-
-
-
 
     private void actualizarControles(float delta, ControlJugador c1, ControlJugador c2) {
         if (c1 != null) c1.actualizar(delta);
@@ -241,5 +204,23 @@ public final class SistemaActualizacionPartida {
             j2.tick(delta);
             if (estabaEnMuerte && !j2.estaEnMuerte() && sprites != null) sprites.detenerMuerte(j2);
         }
+    }
+
+    public SistemaActualizacionPartida(
+    GestorDeEntidades gestorEntidades,
+    FisicaMundo fisica,
+    CamaraDeSala camaraSala,
+    SistemaTransicionSala transicionSala,
+    ProcesadorColasEventos procesadorEventos,
+    SistemaSpritesEntidades sprites,
+    RedPartidaCliente red
+    ) {
+        this.gestorEntidades = gestorEntidades;
+        this.fisica = fisica;
+        this.camaraSala = camaraSala;
+        this.transicionSala = transicionSala;
+        this.procesadorEventos = procesadorEventos;
+        this.sprites = sprites;
+        this.red = red;
     }
 }

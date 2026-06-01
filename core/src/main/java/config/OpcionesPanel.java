@@ -2,15 +2,15 @@ package config;
 
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+
 import io.github.principal.Principal;
 
 public class OpcionesPanel {
-
     private final Principal game;
 
-    private final Table root = new Table();
-    private final Slider volumen;
     private final SelectBox<String> resoluciones;
+
+    private final Slider volumen;
 
     public OpcionesPanel(Principal game, Skin skin) {
         this.game = game;
@@ -22,8 +22,8 @@ public class OpcionesPanel {
         resoluciones.setItems("1280x720", "1600x900", "1920x1080");
 
         Label controles = new Label(
-            "Jugador 1: WASD + Acción\nJugador 2: Flechas + Acción",
-            skin
+        "Jugador 1: WASD + Acción\nJugador 2: Flechas + Acción",
+        skin
         );
 
         root.center();
@@ -46,14 +46,16 @@ public class OpcionesPanel {
         return root;
     }
 
+    private final Table root = new Table();
+
     private void cargarValoresGuardados() {
         volumen.setValue(game.settings.getVolumen());
 
         String actual = game.settings.getWindowW() + "x" + game.settings.getWindowH();
         boolean coincide =
-            actual.equals("1280x720") ||
-                actual.equals("1600x900") ||
-                actual.equals("1920x1080");
+        actual.equals("1280x720") ||
+        actual.equals("1600x900") ||
+        actual.equals("1920x1080");
         resoluciones.setSelected(coincide ? actual : "1280x720");
     }
 

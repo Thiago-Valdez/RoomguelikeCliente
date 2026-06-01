@@ -7,40 +7,44 @@ import mapa.model.Habitacion;
 import mapa.model.TipoSala;
 
 /**
- * Controla el “puzzle de botones” por sala:
- * - Aplica a ACERTIJO y COMBATE (puertas cerradas hasta cumplir condición)
- * - Estado persistente: si la sala ya fue resuelta, queda desbloqueada para siempre
- * - “Mantenido”: mientras NO esté resuelta, si un jugador suelta su botón, vuelve a bloquearse
- */
+* Controla el “puzzle de botones” por sala:
+* - Aplica a ACERTIJO y COMBATE (puertas cerradas hasta cumplir condición)
+* - Estado persistente: si la sala ya fue resuelta, queda desbloqueada para siempre
+* - “Mantenido”: mientras NO esté resuelta, si un jugador suelta su botón, vuelve a bloquearse
+*/
 public class ControlPuzzlePorSala {
-
     private static final int MAX_JUGADORES = 2;
 
-    private static class Estado {
-        boolean resuelta = false;   // ✅ persistente
-        boolean locked = true;      // puertas cerradas
-        boolean[] pressed = new boolean[MAX_JUGADORES + 1]; // indices 1..2
-
-        /**
-         * Cantidad de enemigos vivos asociados a la sala.
-         * Solo se usa para COMBATE/JEFE.
-         */
-        int enemigosVivos = Integer.MAX_VALUE;
+    public boolean estaBloqueada(Habitacion sala) {
+        if (!aplica(sala)) return false;
+        Estado e = estados.get(sala);
+        // si nunca se inicializó, por seguridad: bloqueada
+        return e == null || e.locked;
     }
 
-    private final Map<Habitacion, Estado> estados = new HashMap<>();
+    public boolean estaResuelta(Habitacion sala) {
+        if (!aplica(sala)) return true;
+        Estado e = estados.get(sala);
+        return e != null && e.resuelta;
+    }
 
     private boolean aplica(Habitacion sala) {
         if (sala == null) return false;
         return sala.tipo == TipoSala.ACERTIJO
-                || sala.tipo == TipoSala.COMBATE
-                || sala.tipo == TipoSala.JEFE;
+        || sala.tipo == TipoSala.COMBATE
+        || sala.tipo == TipoSala.JEFE;
+    }
+
+    private boolean jugadorValido(int jugadorId) {
+        return jugadorId >= 1 && jugadorId <= MAX_JUGADORES;
     }
 
     private boolean requiereEnemigosMuertos(Habitacion sala) {
         if (sala == null) return false;
         return sala.tipo == TipoSala.COMBATE || sala.tipo == TipoSala.JEFE;
     }
+
+    private final Map<Habitacion, Estado> estados = new HashMap<>();
 
     private void evaluar(Habitacion sala, Estado e) {
         if (sala == null || e == null) return;
@@ -54,7 +58,7 @@ public class ControlPuzzlePorSala {
 
         switch (sala.tipo) {
 
-            case ACERTIJO -> {
+        case ACERTIJO -> {
                 if (botonesOk) {
                     e.resuelta = true;
                     e.locked = false;
@@ -63,7 +67,7 @@ public class ControlPuzzlePorSala {
                 }
             }
 
-            case COMBATE, JEFE -> {
+        case COMBATE, JEFE -> {
                 // ✅ EXACTAMENTE la misma lógica
                 if (botonesOk) {
                     e.resuelta = true;
@@ -73,17 +77,25 @@ public class ControlPuzzlePorSala {
                 }
             }
 
-            default -> {
+        default -> {
                 e.resuelta = true;
                 e.locked = false;
             }
         }
     }
 
-
-
-    private boolean jugadorValido(int jugadorId) {
-        return jugadorId >= 1 && jugadorId <= MAX_JUGADORES;
+    /**
+    * Actualiza enemigos vivos y re-evalúa condición.
+    * Llamar:
+    * - al entrar a sala (post spawn desde Tiled)
+    * - y/o cada frame (barato, lista chica)
+    */
+    public void setEnemigosVivos(Habitacion sala, int enemigosVivos) {
+        if (!aplica(sala)) return;
+        Estado e = estados.computeIfAbsent(sala, k -> new Estado());
+        if (e.resuelta) return;
+        e.enemigosVivos = Math.max(0, enemigosVivos);
+        evaluar(sala, e);
     }
 
     /** Llamar al entrar a una sala (o al cambiar salaActual) */
@@ -110,11 +122,14 @@ public class ControlPuzzlePorSala {
         e.enemigosVivos = Integer.MAX_VALUE;
     }
 
-    public boolean estaBloqueada(Habitacion sala) {
-        if (!aplica(sala)) return false;
-        Estado e = estados.get(sala);
-        // si nunca se inicializó, por seguridad: bloqueada
-        return e == null || e.locked;
+    /** Para futuro: desbloquear COMBATE por enemigos muertos, etc. */
+    public void marcarResuelta(Habitacion sala) {
+        if (!aplica(sala)) return;
+        Estado e = estados.computeIfAbsent(sala, k -> new Estado());
+        e.resuelta = true;
+        e.locked = false;
+        for (int i = 1; i <= MAX_JUGADORES; i++) e.pressed[i] = false;
+        e.enemigosVivos = 0;
     }
 
     /** Se llama al detectar BEGIN contact del jugador con SU botón */
@@ -148,33 +163,15 @@ public class ControlPuzzlePorSala {
         evaluar(sala, e);
     }
 
-    /**
-     * Actualiza enemigos vivos y re-evalúa condición.
-     * Llamar:
-     * - al entrar a sala (post spawn desde Tiled)
-     * - y/o cada frame (barato, lista chica)
-     */
-    public void setEnemigosVivos(Habitacion sala, int enemigosVivos) {
-        if (!aplica(sala)) return;
-        Estado e = estados.computeIfAbsent(sala, k -> new Estado());
-        if (e.resuelta) return;
-        e.enemigosVivos = Math.max(0, enemigosVivos);
-        evaluar(sala, e);
-    }
+    private static class Estado {
+        boolean resuelta = false;   // ✅ persistente
+        boolean locked = true;      // puertas cerradas
+        boolean[] pressed = new boolean[MAX_JUGADORES + 1]; // indices 1..2
 
-    /** Para futuro: desbloquear COMBATE por enemigos muertos, etc. */
-    public void marcarResuelta(Habitacion sala) {
-        if (!aplica(sala)) return;
-        Estado e = estados.computeIfAbsent(sala, k -> new Estado());
-        e.resuelta = true;
-        e.locked = false;
-        for (int i = 1; i <= MAX_JUGADORES; i++) e.pressed[i] = false;
-        e.enemigosVivos = 0;
-    }
-
-    public boolean estaResuelta(Habitacion sala) {
-        if (!aplica(sala)) return true;
-        Estado e = estados.get(sala);
-        return e != null && e.resuelta;
+        /**
+        * Cantidad de enemigos vivos asociados a la sala.
+        * Solo se usa para COMBATE/JEFE.
+        */
+        int enemigosVivos = Integer.MAX_VALUE;
     }
 }

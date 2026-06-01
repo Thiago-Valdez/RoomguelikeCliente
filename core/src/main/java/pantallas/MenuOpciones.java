@@ -6,22 +6,42 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.utils.viewport.ScreenViewport;
+
 import io.github.principal.Principal;
 
 public class MenuOpciones implements Screen {
-
-    private final Principal game;
-    private final Screen volverA;
+    private Slider volumen;
 
     private Stage stage;
-    private Skin skin;
 
-    private Slider volumen;
+    private final Principal game;
+
     private SelectBox<String> resoluciones;
 
-    public MenuOpciones(Principal game, Screen volverA) {
-        this.game = game;
-        this.volverA = volverA;
+    private Skin skin;
+
+    private final Screen volverA;
+
+    @Override public void hide() { /* no dispose acá */ }
+
+    @Override
+    public void dispose() {
+        stage.dispose();
+        skin.dispose();
+    }
+
+    @Override
+    public void render(float delta) {
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        stage.act(delta);
+        stage.draw();
+    }
+
+    @Override
+    public void resize(int w, int h) {
+        stage.getViewport().update(w, h, true);
     }
 
     @Override
@@ -35,49 +55,9 @@ public class MenuOpciones implements Screen {
         conectarListeners();
     }
 
-    private void construirUI() {
-        Label titulo = new Label("Opciones", skin);
-
-        volumen = new Slider(0f, 1f, 0.01f, false, skin);
-
-        resoluciones = new SelectBox<>(skin);
-        resoluciones.setItems(
-            "1280x720",
-            "1600x900",
-            "1920x1080"
-        );
-
-        Label controles = new Label(
-            "Jugador 1: WASD + Acción\nJugador 2: Flechas + Acción",
-            skin
-        );
-
-        TextButton volver = new TextButton("Volver", skin);
-        volver.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ClickListener() {
-            @Override
-            public void clicked(com.badlogic.gdx.scenes.scene2d.InputEvent event, float x, float y) {
-                game.cambiarPantalla(volverA);
-            }
-        });
-
-        Table t = new Table();
-        t.setFillParent(true);
-        t.center();
-
-        t.add(titulo).padBottom(30).row();
-
-        t.add(new Label("Volumen", skin)).row();
-        t.add(volumen).width(300).padBottom(20).row();
-
-        t.add(new Label("Resolución", skin)).row();
-        t.add(resoluciones).width(300).padBottom(20).row();
-
-        t.add(new Label("Controles", skin)).padTop(10).row();
-        t.add(controles).padBottom(30).row();
-
-        t.add(volver).width(200).height(50);
-
-        stage.addActor(t);
+    public MenuOpciones(Principal game, Screen volverA) {
+        this.game = game;
+        this.volverA = volverA;
     }
 
     private void cargarValores() {
@@ -88,9 +68,9 @@ public class MenuOpciones implements Screen {
         String actual = game.settings.getWindowW() + "x" + game.settings.getWindowH();
 
         boolean coincide =
-            actual.equals("1280x720") ||
-                actual.equals("1600x900") ||
-                actual.equals("1920x1080");
+        actual.equals("1280x720") ||
+        actual.equals("1600x900") ||
+        actual.equals("1920x1080");
 
         resoluciones.setSelected(coincide ? actual : "1280x720");
     }
@@ -122,26 +102,41 @@ public class MenuOpciones implements Screen {
         });
     }
 
-    @Override
-    public void render(float delta) {
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+    private void construirUI() {
+        Label titulo = new Label("Opciones", skin);
 
-        stage.act(delta);
-        stage.draw();
-    }
+        volumen = new Slider(0f, 1f, 0.01f, false, skin);
 
-    @Override
-    public void resize(int w, int h) {
-        stage.getViewport().update(w, h, true);
-    }
+        resoluciones = new SelectBox<>(skin);
+        resoluciones.setItems(
+        "1280x720",
+        "1600x900",
+        "1920x1080"
+        );
 
-    @Override public void hide() { /* no dispose acá */ }
+        TextButton volver = new TextButton("Volver", skin);
+        volver.addListener(new com.badlogic.gdx.scenes.scene2d.utils.ClickListener() {
+            @Override
+            public void clicked(com.badlogic.gdx.scenes.scene2d.InputEvent event, float x, float y) {
+                game.cambiarPantalla(volverA);
+            }
+        });
 
-    @Override
-    public void dispose() {
-        stage.dispose();
-        skin.dispose();
+        Table t = new Table();
+        t.setFillParent(true);
+        t.center();
+
+        t.add(titulo).padBottom(30).row();
+
+        t.add(new Label("Volumen", skin)).row();
+        t.add(volumen).width(300).padBottom(20).row();
+
+        t.add(new Label("Resolución", skin)).row();
+        t.add(resoluciones).width(300).padBottom(20).row();
+
+        t.add(volver).width(200).height(50);
+
+        stage.addActor(t);
     }
 
     @Override public void pause() {}

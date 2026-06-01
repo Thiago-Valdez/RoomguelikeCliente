@@ -16,25 +16,40 @@ import mapa.botones.DatosBoton;
 import mapa.model.Habitacion;
 
 public class BotonesDesdeTiled {
-
     private static final String LAYER_NAME = "botones";
 
-    // Mantengo tu firma original para no romper nada
-    public static void crearBotones(TiledMap map, World world) {
-        crearBotones(map, world, null, null, null);
+    private static String getString(MapObject obj, String key, String def) {
+        Object v = obj.getProperties().get(key);
+        return (v != null) ? String.valueOf(v) : def;
+    }
+
+    private static String safeName(MapObject obj) {
+        String n = obj.getName();
+        return (n == null) ? "<sin-nombre>" : n;
+    }
+
+    private static int getInt(MapObject obj, String key, int def) {
+        Object v = obj.getProperties().get(key);
+        if (v == null) return def;
+        try {
+            if (v instanceof Integer i) return i;
+            return Integer.parseInt(String.valueOf(v));
+        } catch (Exception e) {
+            return def;
+        }
     }
 
     /**
-     * Crea sensores de botones desde Tiled y opcionalmente crea sus visuales.
-     *
-     * @param framesRojo  TextureRegion.split() de spritesheet rojo (1x2 recomendado)
-     * @param framesAzul  TextureRegion.split() de spritesheet azul (1x2 recomendado)
-     * @param salidaVisuales lista donde se agregan BotonVisual (puede ser null si no querés visuales todavía)
-     */
+    * Crea sensores de botones desde Tiled y opcionalmente crea sus visuales.
+    *
+    * @param framesRojo  TextureRegion.split() de spritesheet rojo (1x2 recomendado)
+    * @param framesAzul  TextureRegion.split() de spritesheet azul (1x2 recomendado)
+    * @param salidaVisuales lista donde se agregan BotonVisual (puede ser null si no querés visuales todavía)
+    */
     public static void crearBotones(TiledMap map, World world,
-                                    TextureRegion[][] framesRojo,
-                                    TextureRegion[][] framesAzul,
-                                    List<BotonVisual> salidaVisuales) {
+    TextureRegion[][] framesRojo,
+    TextureRegion[][] framesAzul,
+    List<BotonVisual> salidaVisuales) {
         if (map == null || world == null) {
             Gdx.app.log("BotonesDesdeTiled", "map/world null -> no se crean botones");
             return;
@@ -55,8 +70,8 @@ public class BotonesDesdeTiled {
             if (!(obj instanceof RectangleMapObject rmo)) {
                 ignorados++;
                 Gdx.app.log("BotonesDesdeTiled",
-                    "Objeto ignorado (no es rect): name=" + safeName(obj) +
-                        " type=" + obj.getClass().getSimpleName());
+                "Objeto ignorado (no es rect): name=" + safeName(obj) +
+                " type=" + obj.getClass().getSimpleName());
                 continue;
             }
 
@@ -64,8 +79,8 @@ public class BotonesDesdeTiled {
             if (rect == null || rect.width <= 0 || rect.height <= 0) {
                 ignorados++;
                 Gdx.app.log("BotonesDesdeTiled",
-                    "Rect inválido: name=" + safeName(obj) +
-                        " rect=" + rect);
+                "Rect inválido: name=" + safeName(obj) +
+                " rect=" + rect);
                 continue;
             }
 
@@ -76,15 +91,15 @@ public class BotonesDesdeTiled {
             if (salaStr == null || salaStr.isBlank()) {
                 ignorados++;
                 Gdx.app.log("BotonesDesdeTiled",
-                    "Botón inválido: falta prop 'sala'. name=" + safeName(obj));
+                "Botón inválido: falta prop 'sala'. name=" + safeName(obj));
                 continue;
             }
 
             if (jugadorId < 1 || jugadorId > 2) {
                 ignorados++;
                 Gdx.app.log("BotonesDesdeTiled",
-                    "Botón inválido: prop 'jugador' debe ser 1 o 2. name=" + safeName(obj) +
-                        " jugador=" + jugadorId);
+                "Botón inválido: prop 'jugador' debe ser 1 o 2. name=" + safeName(obj) +
+                " jugador=" + jugadorId);
                 continue;
             }
 
@@ -94,8 +109,8 @@ public class BotonesDesdeTiled {
             } catch (Exception e) {
                 ignorados++;
                 Gdx.app.log("BotonesDesdeTiled",
-                    "Sala inválida en botón: name=" + safeName(obj) +
-                        " salaStr=" + salaStr);
+                "Sala inválida en botón: name=" + safeName(obj) +
+                " salaStr=" + salaStr);
                 continue;
             }
 
@@ -140,8 +155,8 @@ public class BotonesDesdeTiled {
                 } catch (Exception ex) {
                     // Si el split no es 1x2 o viene mal
                     Gdx.app.log("BotonesDesdeTiled",
-                        "No se pudo asignar sprite a botón (frames inválidos). name=" + safeName(obj) +
-                            " jugador=" + jugadorId);
+                    "No se pudo asignar sprite a botón (frames inválidos). name=" + safeName(obj) +
+                    " jugador=" + jugadorId);
                     continue;
                 }
 
@@ -164,29 +179,13 @@ public class BotonesDesdeTiled {
         }
 
         Gdx.app.log("BotonesDesdeTiled",
-            "Botones creados: " + creados +
-                " | visuales: " + visualesCreados +
-                " | ignorados: " + ignorados);
+        "Botones creados: " + creados +
+        " | visuales: " + visualesCreados +
+        " | ignorados: " + ignorados);
     }
 
-    private static String safeName(MapObject obj) {
-        String n = obj.getName();
-        return (n == null) ? "<sin-nombre>" : n;
-    }
-
-    private static String getString(MapObject obj, String key, String def) {
-        Object v = obj.getProperties().get(key);
-        return (v != null) ? String.valueOf(v) : def;
-    }
-
-    private static int getInt(MapObject obj, String key, int def) {
-        Object v = obj.getProperties().get(key);
-        if (v == null) return def;
-        try {
-            if (v instanceof Integer i) return i;
-            return Integer.parseInt(String.valueOf(v));
-        } catch (Exception e) {
-            return def;
-        }
+    // Mantengo tu firma original para no romper nada
+    public static void crearBotones(TiledMap map, World world) {
+        crearBotones(map, world, null, null, null);
     }
 }

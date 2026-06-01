@@ -11,36 +11,16 @@ import mapa.trampilla.DatosTrampilla;
 import mapa.trampilla.TrampillaVisual;
 
 /**
- * Encapsula el comportamiento de "fin de nivel":
- * - En salas JEFE: spawnea una trampilla (sensor + visual) cuando la sala queda resuelta.
- * - Permite limpiar la trampilla al salir de la sala.
- */
+* Encapsula el comportamiento de "fin de nivel":
+* - En salas JEFE: spawnea una trampilla (sensor + visual) cuando la sala queda resuelta.
+* - Permite limpiar la trampilla al salir de la sala.
+*/
 public final class SistemaFinNivel {
-
     private Body trampillaBody;
-    private TrampillaVisual trampillaVisual;
+
     private Habitacion salaTrampilla;
 
-    public void actualizar(Habitacion salaActual,
-                           ControlPuzzlePorSala controlPuzzle,
-                           FisicaMundo fisica,
-                           TextureRegion regionTrampilla) {
-
-        if (salaActual == null || fisica == null) return;
-
-        // Si cambiamos de sala y había trampilla, la destruimos.
-        if (salaTrampilla != null && salaActual != salaTrampilla) {
-            limpiar(fisica);
-        }
-
-        if (salaActual.tipo != TipoSala.JEFE) return;
-        if (controlPuzzle == null) return;
-
-        // Solo spawnea cuando la sala JEFE queda resuelta (enemigos=0 y ambos botones presionados).
-        if (trampillaBody == null && controlPuzzle.estaResuelta(salaActual)) {
-            spawnTrampilla(salaActual, fisica, regionTrampilla);
-        }
-    }
+    private TrampillaVisual trampillaVisual;
 
     public TrampillaVisual getTrampillaVisual() {
         return trampillaVisual;
@@ -48,10 +28,6 @@ public final class SistemaFinNivel {
 
     public boolean hayTrampilla() {
         return trampillaBody != null;
-    }
-
-    public void reset() {
-        trampillaBody = null;
     }
 
     public void limpiar(FisicaMundo fisica) {
@@ -73,6 +49,10 @@ public final class SistemaFinNivel {
         salaTrampilla = null;
     }
 
+    public void reset() {
+        trampillaBody = null;
+    }
+
     private void spawnTrampilla(Habitacion sala, FisicaMundo fisica, TextureRegion regionTrampilla) {
         float size = 16f;
         float baseX = sala.gridX * sala.ancho;
@@ -87,6 +67,27 @@ public final class SistemaFinNivel {
         // Visual opcional: si no hay textura aún, igual spawnea el sensor.
         if (regionTrampilla != null) {
             trampillaVisual = new TrampillaVisual(x, y, size, size, regionTrampilla);
+        }
+    }
+
+    public void actualizar(Habitacion salaActual,
+    ControlPuzzlePorSala controlPuzzle,
+    FisicaMundo fisica,
+    TextureRegion regionTrampilla) {
+
+        if (salaActual == null || fisica == null) return;
+
+        // Si cambiamos de sala y había trampilla, la destruimos.
+        if (salaTrampilla != null && salaActual != salaTrampilla) {
+            limpiar(fisica);
+        }
+
+        if (salaActual.tipo != TipoSala.JEFE) return;
+        if (controlPuzzle == null) return;
+
+        // Solo spawnea cuando la sala JEFE queda resuelta (enemigos=0 y ambos botones presionados).
+        if (trampillaBody == null && controlPuzzle.estaResuelta(salaActual)) {
+            spawnTrampilla(salaActual, fisica, regionTrampilla);
         }
     }
 }

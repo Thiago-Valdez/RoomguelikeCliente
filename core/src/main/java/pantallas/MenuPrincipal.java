@@ -13,18 +13,34 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import io.github.principal.Principal;
 
 public class MenuPrincipal implements Screen {
+    private Stage stage;
 
     private final Principal game;
 
-    private Stage stage;
-    private Skin skin;
-
-    // Fondo
-    private Texture texFondo;
     private Image imgFondo;
 
-    public MenuPrincipal(Principal game) {
-        this.game = game;
+    private Skin skin;
+
+    @Override public void hide() { }
+
+    @Override
+    public void dispose() {
+        stage.dispose();
+        skin.dispose();
+        if (texFondo != null) texFondo.dispose();
+    }
+
+    @Override
+    public void render(float delta) {
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        stage.act(delta);
+        stage.draw();
+    }
+
+    @Override
+    public void resize(int w, int h) {
+        stage.getViewport().update(w, h, true);
     }
 
     @Override
@@ -37,6 +53,10 @@ public class MenuPrincipal implements Screen {
 
         construirFondo();
         construirUI();
+    }
+
+    public MenuPrincipal(Principal game) {
+        this.game = game;
     }
 
     private void construirFondo() {
@@ -54,7 +74,7 @@ public class MenuPrincipal implements Screen {
         Table overlay = new Table();
         overlay.setFillParent(true);
         overlay.setBackground(
-            skin.newDrawable("white", 0f, 0f, 0f, 0.35f)
+        skin.newDrawable("white", 0f, 0f, 0f, 0.35f)
         );
         stage.addActor(overlay);
     }
@@ -96,27 +116,8 @@ public class MenuPrincipal implements Screen {
         stage.addActor(root);
     }
 
-    @Override
-    public void render(float delta) {
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        stage.act(delta);
-        stage.draw();
-    }
-
-    @Override
-    public void resize(int w, int h) {
-        stage.getViewport().update(w, h, true);
-    }
-
-    @Override public void hide() { }
-
-    @Override
-    public void dispose() {
-        stage.dispose();
-        skin.dispose();
-        if (texFondo != null) texFondo.dispose();
-    }
+    // Fondo
+    private Texture texFondo;
 
     @Override public void pause() {}
     @Override public void resume() {}

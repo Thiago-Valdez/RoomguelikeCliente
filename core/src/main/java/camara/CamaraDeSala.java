@@ -7,27 +7,20 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import mapa.model.Habitacion;
 
 /**
- * Cámara ortográfica que siempre queda centrada en la habitación actual.
- * - Soporta "snap" instantáneo o una transición suave (lerp).
- * - Usa FitViewport para mantener relación de aspecto.
- *
- * Unidades de mundo: píxeles (asumiendo que tus habitaciones usan px).
- */
+* Cámara ortográfica que siempre queda centrada en la habitación actual.
+* - Soporta "snap" instantáneo o una transición suave (lerp).
+* - Usa FitViewport para mantener relación de aspecto.
+*
+* Unidades de mundo: píxeles (asumiendo que tus habitaciones usan px).
+*/
 public class CamaraDeSala {
-
     private final OrthographicCamera camara;
+
     private final Viewport viewport;
 
-    // Objetivo de la interpolación (centro objetivo)
-    private float objetivoX;
-    private float objetivoY;
-
-    // Config de lerp (0 = salto instantáneo; 1 = no se mueve)
-    private float factorLerp = 0f; // por defecto: salto instantáneo
-
-    // Tamaño lógico del mundo visible (en px, por ejemplo, igual a una sala)
-    private final float anchoMundoVisible;
     private final float altoMundoVisible;
+
+    private float objetivoY;
 
     public CamaraDeSala(float anchoMundoVisible, float altoMundoVisible) {
         this.anchoMundoVisible = anchoMundoVisible;
@@ -43,27 +36,34 @@ public class CamaraDeSala {
         camara.update();
     }
 
-    /** Llama en tu Screen.resize(w,h). */
-    public void resize(int width, int height) {
-        viewport.update(width, height, true /* center camera */);
-    }
-
     public OrthographicCamera getCamara() { return camara; }
     public Viewport getViewport() { return viewport; }
 
     /**
-     * Define el "snapping" o transición:
-     * - factor = 0  -> snap instantáneo
-     * - factor ~ 0.1..0.25 -> transición suave rápida
-     * - factor ~ 0.5 -> muy suave (lento)
-     */
+    * Define el "snapping" o transición:
+    * - factor = 0  -> snap instantáneo
+    * - factor ~ 0.1..0.25 -> transición suave rápida
+    * - factor ~ 0.5 -> muy suave (lento)
+    */
     public void setFactorLerp(float factor) {
         this.factorLerp = factor;
     }
 
+    public void centrarEn(float x, float y) {
+        this.objetivoX = x;
+        this.objetivoY = y;
+        camara.position.set(x, y, 0f);
+        camara.update();
+    }
+
+    private static float centroY(Habitacion h) {
+        float worldY = h.gridY * h.alto;
+        return worldY + h.alto * 0.5f;
+    }
+
     /**
-     * Centra instantáneamente la cámara en la habitación dada.
-     */
+    * Centra instantáneamente la cámara en la habitación dada.
+    */
 
     /** Centra la cámara en el centro de una habitación (en píxeles). */
     public void centrarEn(Habitacion habitacion) {
@@ -75,17 +75,10 @@ public class CamaraDeSala {
         centrarEn(cx, cy);
     }
 
-    public void centrarEn(float x, float y) {
-        this.objetivoX = x;
-        this.objetivoY = y;
-        camara.position.set(x, y, 0f);
-        camara.update();
-    }
-
     /**
-     * Configura el objetivo y deja que el update haga el lerp.
-     * Si factorLerp = 0, el resultado es equivalente a centrarEn (salto instantáneo).
-     */
+    * Configura el objetivo y deja que el update haga el lerp.
+    * Si factorLerp = 0, el resultado es equivalente a centrarEn (salto instantáneo).
+    */
     public void moverHacia(Habitacion habitacion) {
         this.objetivoX = centroX(habitacion);
         this.objetivoY = centroY(habitacion);
@@ -96,8 +89,8 @@ public class CamaraDeSala {
     }
 
     /**
-     * Llamar una vez por frame (ej. en render()) si usás transición suave.
-     */
+    * Llamar una vez por frame (ej. en render()) si usás transición suave.
+    */
     public void update(float delta) {
         if (factorLerp <= 0f) {
             // Snap duro al objetivo
@@ -109,6 +102,11 @@ public class CamaraDeSala {
         camara.update();
     }
 
+    /** Llama en tu Screen.resize(w,h). */
+    public void resize(int width, int height) {
+        viewport.update(width, height, true /* center camera */);
+    }
+
     // ==== Cálculo de centro de habitación en mundo ====
 
     private static float centroX(Habitacion h) {
@@ -116,10 +114,12 @@ public class CamaraDeSala {
         return worldX + h.ancho * 0.5f;
     }
 
-    private static float centroY(Habitacion h) {
-        float worldY = h.gridY * h.alto;
-        return worldY + h.alto * 0.5f;
-    }
+    // Config de lerp (0 = salto instantáneo; 1 = no se mueve)
+    private float factorLerp = 0f; // por defecto: salto instantáneo
 
+    // Tamaño lógico del mundo visible (en px, por ejemplo, igual a una sala)
+    private final float anchoMundoVisible;
 
+    // Objetivo de la interpolación (centro objetivo)
+    private float objetivoX;
 }

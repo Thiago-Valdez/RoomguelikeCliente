@@ -6,39 +6,57 @@ import com.badlogic.gdx.physics.box2d.*;
 import com.badlogic.gdx.utils.Array;
 
 /**
- * Mundo de Box2D + debug renderer.
- * Volvemos a usar PIXELES como unidad de Box2D.
- */
+* Mundo de Box2D + debug renderer.
+* Volvemos a usar PIXELES como unidad de Box2D.
+*/
 public class FisicaMundo {
-
-    // Podés dejarlo por compatibilidad, pero no lo usamos más para escalar.
-    public static final float PPM = 100f;
-    private float accumulator = 0f;
     private static final float FIXED_TIMESTEP = 1f / 120f;
-    private static final int VELOCITY_ITERS = 6;
-    private static final int POSITION_ITERS = 2;
+
     private static final float MAX_FRAME_TIME = 0.25f; // anti “spiral of death”
 
-
     private final World world;
+
+    private static final int POSITION_ITERS = 2;
+
+    private static final int VELOCITY_ITERS = 6;
+
     private final Box2DDebugRenderer debugRenderer;
 
-    /**
-     * NO crea un World nuevo: usa el que le pasás.
-     */
-    public FisicaMundo(World world) {
-        this.world = world;
-        this.debugRenderer = new Box2DDebugRenderer();
-    }
+    private float accumulator = 0f;
 
     public World world() {
         return world;
     }
 
+    public void destruirBody(Body body) {
+        if (body == null) return;
+        world.destroyBody(body);
+    }
+
+    public void dispose() {
+        world.dispose();
+        debugRenderer.dispose();
+    }
+
+    public void setContactListener(ContactListener listener) {
+        world.setContactListener(listener);
+    }
+
+    public void step(float delta) {
+        // cap para evitar que si el juego se cuelga (alt-tab, breakpoint) explote la física
+        float frameTime = Math.min(delta, MAX_FRAME_TIME);
+        accumulator += frameTime;
+
+        while (accumulator >= FIXED_TIMESTEP) {
+            world.step(FIXED_TIMESTEP, VELOCITY_ITERS, POSITION_ITERS);
+            accumulator -= FIXED_TIMESTEP;
+        }
+    }
+
     /**
-     * Crea un sensor rectangular estático en PIXELES.
-     * (x,y) es la esquina inferior-izquierda.
-     */
+    * Crea un sensor rectangular estático en PIXELES.
+    * (x,y) es la esquina inferior-izquierda.
+    */
     public Body crearSensorCaja(float x, float y, float w, float h, Object fixtureUserData) {
         BodyDef bd = new BodyDef();
         bd.type = BodyDef.BodyType.StaticBody;
@@ -60,38 +78,17 @@ public class FisicaMundo {
         return body;
     }
 
-    public void destruirBody(Body body) {
-        if (body == null) return;
-        world.destroyBody(body);
-    }
-
-    public void setContactListener(ContactListener listener) {
-        world.setContactListener(listener);
-    }
-
-    public void step(float delta) {
-        // cap para evitar que si el juego se cuelga (alt-tab, breakpoint) explote la física
-        float frameTime = Math.min(delta, MAX_FRAME_TIME);
-        accumulator += frameTime;
-
-        while (accumulator >= FIXED_TIMESTEP) {
-            world.step(FIXED_TIMESTEP, VELOCITY_ITERS, POSITION_ITERS);
-            accumulator -= FIXED_TIMESTEP;
-        }
-    }
-
-
     /**
-     * Debug de Box2D: ahora SIN escalas raras.
-     * La cámara ya está en píxeles y los cuerpos también.
-     */
+    * Debug de Box2D: ahora SIN escalas raras.
+    * La cámara ya está en píxeles y los cuerpos también.
+    */
     public void debugDraw(OrthographicCamera camara) {
         //debugRenderer.render(world, camara.combined);
     }
 
     /**
-     * Debug específico del jugador: solo logea bodies que sean el jugador.
-     */
+    * Debug específico del jugador: solo logea bodies que sean el jugador.
+    */
     public void debugLogJugador() {
         Array<Body> bodies = new Array<>();
         world.getBodies(bodies);
@@ -127,11 +124,11 @@ public class FisicaMundo {
             Vector2 pos = b.getPosition();
 
             com.badlogic.gdx.Gdx.app.log(
-                "DEBUG_JUGADOR",
-                "Body jugador: type=" + b.getType() +
-                    " pos=(" + pos.x + ", " + pos.y + ")" +
-                    " worldHash=" + System.identityHashCode(world) +
-                    " bodyHash=" + System.identityHashCode(b)
+            "DEBUG_JUGADOR",
+            "Body jugador: type=" + b.getType() +
+            " pos=(" + pos.x + ", " + pos.y + ")" +
+            " worldHash=" + System.identityHashCode(world) +
+            " bodyHash=" + System.identityHashCode(b)
             );
         }
 
@@ -140,8 +137,14 @@ public class FisicaMundo {
         }
     }
 
-    public void dispose() {
-        world.dispose();
-        debugRenderer.dispose();
+    /**
+    * NO crea un World nuevo: usa el que le pasás.
+    */
+    public FisicaMundo(World world) {
+        this.world = world;
+        this.debugRenderer = new Box2DDebugRenderer();
     }
+
+    // Podés dejarlo por compatibilidad, pero no lo usamos más para escalar.
+    public static final float PPM = 100f;
 }

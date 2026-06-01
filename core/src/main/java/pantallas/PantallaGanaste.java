@@ -12,13 +12,27 @@ import com.badlogic.gdx.utils.viewport.ScreenViewport;
 import io.github.principal.Principal;
 
 public class PantallaGanaste implements Screen {
-
     private final Principal game;
-    private Stage stage;
+
     private Skin skin;
 
-    public PantallaGanaste(Principal game) {
-        this.game = game;
+    private Stage stage;
+
+    @Override public void hide() {}
+
+    @Override
+    public void dispose() {
+        stage.dispose();
+        skin.dispose();
+    }
+
+    @Override
+    public void render(float delta) {
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+
+        stage.act(delta);
+        stage.draw();
     }
 
     @Override
@@ -48,25 +62,12 @@ public class PantallaGanaste implements Screen {
         stage.addActor(t);
     }
 
-    @Override
-    public void render(float delta) {
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-
-        stage.act(delta);
-        stage.draw();
+    public PantallaGanaste(Principal game) {
+        this.game = game;
     }
 
     @Override public void resize(int w, int h) {
         stage.getViewport().update(w, h, true);
-    }
-
-    @Override public void hide() {}
-
-    @Override
-    public void dispose() {
-        stage.dispose();
-        skin.dispose();
     }
 
     @Override public void pause() {}

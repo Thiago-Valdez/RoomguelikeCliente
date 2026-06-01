@@ -5,10 +5,11 @@ import entidades.personajes.Jugador;
 import java.util.function.Consumer;
 
 public class Item {
-
     private final String nombre;
-    private final ItemTipo tipo;
+
     private final Consumer<Jugador> efecto;
+
+    private final ItemTipo tipo;
 
     public Item(String nombre, ItemTipo tipo, Consumer<Jugador> efecto) {
         this.nombre = nombre;
@@ -16,12 +17,12 @@ public class Item {
         this.efecto = efecto;
     }
 
-    public String getNombre() {
-        return nombre;
-    }
-
     public ItemTipo getTipo() {
         return tipo;
+    }
+
+    public String getNombre() {
+        return nombre;
     }
 
     /** 👇 ESTE MÉTODO ES CLAVE */

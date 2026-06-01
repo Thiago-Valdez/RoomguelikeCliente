@@ -13,31 +13,37 @@ import entidades.items.Item;
 import entidades.items.ItemTipo;
 
 public class Jugador extends Entidad {
+    private boolean puedeMoverse = true;
 
     private final int id;
 
-    // Estética / apariencia
-    private Genero genero;
+    private float velocidadBase = 100f;
+
     private Estilo estilo;
 
-    // Stats específicos de jugador
-    private int vida;
-    private int vidaMaxima;
-
-    private float velocidadBase = 100f;
-    private float velocidadActual = 100f;
-
-    private boolean puedeMoverse = true;
     private float cooldownDanio = 0f;
 
-    // Inventario simple (ítems pasivos)
-    private final List<Item> objetos = new ArrayList<>();
+    private float velocidadActual = 100f;
 
-    // =========================
-    // ✅ Animación por desplazamiento real (online-friendly)
-    // =========================
-    private final Vector2 ultimaPosAnim = new Vector2(Float.NaN, Float.NaN);
-    private final Vector2 deltaAnim = new Vector2();
+    private int vidaMaxima;
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Entidad)) return false;
+        return true;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Integer.hashCode(id);
+    }
+
+    public Estilo getEstilo() { return estilo; }
+
+    public void setEstilo(Estilo estilo) {
+        if (estilo != null) this.estilo = estilo;
+    }
 
     public Jugador(int id, String nombre, Genero generoInicial, Estilo estiloInicial) {
         super(nombre, 100f, null);
@@ -50,55 +56,8 @@ public class Jugador extends Entidad {
         this.vida = 6;
     }
 
-    public int getId() { return id; }
-
-    // ------------------ Estética ------------------
-
-    public Genero getGenero() { return genero; }
-
-    public void setGenero(Genero genero) {
-        if (genero != null) this.genero = genero;
-    }
-
-    public Estilo getEstilo() { return estilo; }
-
-    public void setEstilo(Estilo estilo) {
-        if (estilo != null) this.estilo = estilo;
-    }
-
     public String getClaveSpriteBase() {
         return "player_" + genero.getSufijoSprite() + "_" + estilo.getSufijoSprite();
-    }
-
-    // ------------------ Vida ------------------
-
-    public int getVida() { return vida; }
-
-    public void setVida(int vida) {
-        if (vida < 0) vida = 0;
-        if (vida > vidaMaxima) vida = vidaMaxima;
-        this.vida = vida;
-    }
-
-    public int getVidaMaxima() { return vidaMaxima; }
-
-    public void setVidaMaxima(int vidaMaxima) {
-        if (vidaMaxima < 1) vidaMaxima = 1;
-        this.vidaMaxima = vidaMaxima;
-        if (vida > vidaMaxima) vida = vidaMaxima;
-    }
-
-
-    // ------------------ Física ------------------
-
-    @Override
-    public void setCuerpoFisico(Body cuerpoFisico) {
-        super.setCuerpoFisico(cuerpoFisico);
-        if (this.cuerpoFisico != null) {
-            this.cuerpoFisico.setUserData(this); // ✅ fuente de verdad
-        }
-        // ✅ inicializar tracker de anim al asignar body
-        resetAnimPos();
     }
 
     public boolean puedeMoverse() { return puedeMoverse && viva; }
@@ -118,6 +77,60 @@ public class Jugador extends Entidad {
         }
 
         if (vida <= 0) viva = false;
+    }
+
+    public boolean puedeRecibirDanio() {
+        return estaViva() && !enMuerte && !inmune && cooldownDanio <= 0f;
+    }
+
+    public float getVelocidad() { return velocidadActual; }
+
+    public void marcarHitCooldown(float segundos) {
+        cooldownDanio = Math.max(cooldownDanio, segundos);
+    }
+
+    public int getId() { return id; }
+
+    // ------------------ Estética ------------------
+
+    public Genero getGenero() { return genero; }
+
+    public void setGenero(Genero genero) {
+        if (genero != null) this.genero = genero;
+    }
+
+    public int getVidaMaxima() { return vidaMaxima; }
+
+    public void setVidaMaxima(int vidaMaxima) {
+        if (vidaMaxima < 1) vidaMaxima = 1;
+        this.vidaMaxima = vidaMaxima;
+        if (vida > vidaMaxima) vida = vidaMaxima;
+    }
+
+    public void agregarObjeto(Item item) {
+        if (item == null) return;
+        objetos.add(item);
+        reaplicarEfectosDeItems();
+    }
+
+    public void reaplicarEfectosDeItems() {
+        this.vidaMaxima = 6;
+        this.velocidad = 100f;
+
+        if (vida > vidaMaxima) vida = vidaMaxima;
+
+        for (Item item : objetos) item.aplicarModificacion(this);
+    }
+
+    public void removerObjeto(Item item) {
+        if (objetos.remove(item)) {
+            reaplicarEfectosDeItems();
+        }
+    }
+
+    public void tick(float delta) {
+        if (cooldownDanio > 0f) cooldownDanio -= delta;
+        updateEstado(delta);
     }
 
     public void updateEstado(float delta) {
@@ -142,19 +155,29 @@ public class Jugador extends Entidad {
         }
     }
 
-    public boolean puedeRecibirDanio() {
-        return estaViva() && !enMuerte && !inmune && cooldownDanio <= 0f;
+    private final Vector2 deltaAnim = new Vector2();
+
+    /**
+    * Llamalo después de un teleport (puerta / UpdateRoom) para que no detecte
+    * un “walk” falso por un salto grande.
+    */
+    public void resetAnimPos() {
+        Body b = getCuerpoFisico();
+        if (b == null) return;
+        ultimaPosAnim.set(b.getPosition());
+        deltaAnim.setZero();
     }
 
-    public void tick(float delta) {
-        if (cooldownDanio > 0f) cooldownDanio -= delta;
-        updateEstado(delta);
-    }
+    // ------------------ Física ------------------
 
-    public float getVelocidad() { return velocidadActual; }
-
-    public void marcarHitCooldown(float segundos) {
-        cooldownDanio = Math.max(cooldownDanio, segundos);
+    @Override
+    public void setCuerpoFisico(Body cuerpoFisico) {
+        super.setCuerpoFisico(cuerpoFisico);
+        if (this.cuerpoFisico != null) {
+            this.cuerpoFisico.setUserData(this); // ✅ fuente de verdad
+        }
+        // ✅ inicializar tracker de anim al asignar body
+        resetAnimPos();
     }
 
     // ------------------ Inventario ------------------
@@ -163,60 +186,26 @@ public class Jugador extends Entidad {
         return Collections.unmodifiableList(objetos);
     }
 
-    public void agregarObjeto(Item item) {
-        if (item == null) return;
-        objetos.add(item);
-        reaplicarEfectosDeItems();
-    }
+    // ------------------ Vida ------------------
 
-    public void removerObjeto(Item item) {
-        if (objetos.remove(item)) {
-            reaplicarEfectosDeItems();
-        }
-    }
+    public int getVida() { return vida; }
 
-    public void reaplicarEfectosDeItems() {
-        this.vidaMaxima = 6;
-        this.velocidad = 100f;
-
+    public void setVida(int vida) {
+        if (vida < 0) vida = 0;
         if (vida > vidaMaxima) vida = vidaMaxima;
-
-        for (Item item : objetos) item.aplicarModificacion(this);
+        this.vida = vida;
     }
 
-    // =========================
-    // ✅ ONLINE / HUD (server-driven)
-    // =========================
+    // Estética / apariencia
+    private Genero genero;
 
-    /**
-     * Setea inventario desde servidor SIN aplicar efectos locales.
-     * Formato: "TIPO1,TIPO2,..." (puede venir vacío).
-     */
-    public void setInventarioRemoto(String tiposCsv) {
-        objetos.clear();
+    // Inventario simple (ítems pasivos)
+    private final List<Item> objetos = new ArrayList<>();
 
-        if (tiposCsv == null) return;
-        String s = tiposCsv.trim();
-        if (s.isEmpty()) return;
+    // Stats específicos de jugador
+    private int vida;
 
-        String[] parts = s.split(",");
-        for (String p : parts) {
-            if (p == null) continue;
-            String t = p.trim();
-            if (t.isEmpty()) continue;
-            try {
-                ItemTipo tipo = ItemTipo.valueOf(t);
-                // Crear un Item "dummy" sin efecto (solo para HUD)
-                Item inst = tipo.crearInstancia();
-                objetos.add(new Item(inst.getNombre(), tipo, null));
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
-    // =========================
     // ✅ Animación ONLINE: delta real por frame
-    // =========================
 
     /** Devuelve el delta de posición desde el último frame (para decidir animación). */
     public Vector2 calcularDeltaAnim() {
@@ -240,26 +229,34 @@ public class Jugador extends Entidad {
         return deltaAnim;
     }
 
+    // ✅ Animación por desplazamiento real (online-friendly)
+    private final Vector2 ultimaPosAnim = new Vector2(Float.NaN, Float.NaN);
+
+    // ✅ ONLINE / HUD (server-driven)
+
     /**
-     * Llamalo después de un teleport (puerta / UpdateRoom) para que no detecte
-     * un “walk” falso por un salto grande.
-     */
-    public void resetAnimPos() {
-        Body b = getCuerpoFisico();
-        if (b == null) return;
-        ultimaPosAnim.set(b.getPosition());
-        deltaAnim.setZero();
-    }
+    * Setea inventario desde servidor SIN aplicar efectos locales.
+    * Formato: "TIPO1,TIPO2,..." (puede venir vacío).
+    */
+    public void setInventarioRemoto(String tiposCsv) {
+        objetos.clear();
 
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Entidad)) return false;
-        return true;
-    }
+        if (tiposCsv == null) return;
+        String s = tiposCsv.trim();
+        if (s.isEmpty()) return;
 
-    @Override
-    public final int hashCode() {
-        return Integer.hashCode(id);
+        String[] parts = s.split(",");
+        for (String p : parts) {
+            if (p == null) continue;
+            String t = p.trim();
+            if (t.isEmpty()) continue;
+            try {
+                ItemTipo tipo = ItemTipo.valueOf(t);
+                // Crear un Item "dummy" sin efecto (solo para HUD)
+                Item inst = tipo.crearInstancia();
+                objetos.add(new Item(inst.getNombre(), tipo, null));
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

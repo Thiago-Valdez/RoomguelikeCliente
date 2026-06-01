@@ -25,33 +25,59 @@ import mapa.puertas.PuertaVisual;
 import mapa.trampilla.TrampillaVisual;
 
 /**
- * Se encarga SOLO del render (mapa, puertas, sprites, debug y HUD).
- * No actualiza gameplay.
- */
+* Se encarga SOLO del render (mapa, puertas, sprites, debug y HUD).
+* No actualiza gameplay.
+*/
 public final class CanalRenderizadoPartida {
-
     private final CamaraDeSala camaraSala;
-    private final OrthogonalTiledMapRenderer mapaRenderer;
-    private final ShapeRenderer shapeRendererMundo;
-    private final SpriteBatch batch;
-    private final FisicaMundo fisica;
-    private final HudJuego hud;
-    private final GestorDeEntidades gestorEntidades;
-    private final SistemaSpritesEntidades sprites;
-    private ShapeRenderer debugRenderer = new ShapeRenderer();
 
+    private final FisicaMundo fisica;
+
+    private final GestorDeEntidades gestorEntidades;
+
+    private final HudJuego hud;
+
+    private final OrthogonalTiledMapRenderer mapaRenderer;
+
+    private final ShapeRenderer shapeRendererMundo;
+
+    private final SistemaSpritesEntidades sprites;
+
+    private final SpriteBatch batch;
+
+    public void dibujarDebugBodies(Camera camara, ShapeRenderer debugRenderer, Body... bodies) {
+        if (camara == null || debugRenderer == null || bodies == null) return;
+
+        debugRenderer.setProjectionMatrix(camara.combined);
+        debugRenderer.begin(ShapeRenderer.ShapeType.Filled);
+
+        for (Body body : bodies) {
+            if (body == null) continue;
+            Vector2 pos = body.getPosition();
+            debugRenderer.rect(pos.x - 2f, pos.y - 2f, 4f, 4f);
+        }
+
+        debugRenderer.end();
+    }
+
+    public void setPuertasVisuales(List<PuertaVisual> puertasVisuales) {
+        this.puertasVisuales.clear();
+        if (puertasVisuales != null) this.puertasVisuales.addAll(puertasVisuales);
+    }
 
     private final List<PuertaVisual> puertasVisuales = new ArrayList<>();
 
+    private ShapeRenderer debugRenderer = new ShapeRenderer();
+
     public CanalRenderizadoPartida(
-        CamaraDeSala camaraSala,
-        OrthogonalTiledMapRenderer mapaRenderer,
-        ShapeRenderer shapeRendererMundo,
-        SpriteBatch batch,
-        FisicaMundo fisica,
-        HudJuego hud,
-        GestorDeEntidades gestorEntidades,
-        SistemaSpritesEntidades sprites
+    CamaraDeSala camaraSala,
+    OrthogonalTiledMapRenderer mapaRenderer,
+    ShapeRenderer shapeRendererMundo,
+    SpriteBatch batch,
+    FisicaMundo fisica,
+    HudJuego hud,
+    GestorDeEntidades gestorEntidades,
+    SistemaSpritesEntidades sprites
     ) {
         this.camaraSala = camaraSala;
         this.mapaRenderer = mapaRenderer;
@@ -63,19 +89,14 @@ public final class CanalRenderizadoPartida {
         this.sprites = sprites;
     }
 
-    public void setPuertasVisuales(List<PuertaVisual> puertasVisuales) {
-        this.puertasVisuales.clear();
-        if (puertasVisuales != null) this.puertasVisuales.addAll(puertasVisuales);
-    }
-
     public void render(
-        float delta,
-        Habitacion salaActual,
-        boolean debugFisica,
-        Jugador jugador1,
-        Jugador jugador2,
-        List<mapa.botones.BotonVisual> botonesVisuales,
-        TrampillaVisual trampillaVisual
+    float delta,
+    Habitacion salaActual,
+    boolean debugFisica,
+    Jugador jugador1,
+    Jugador jugador2,
+    List<mapa.botones.BotonVisual> botonesVisuales,
+    TrampillaVisual trampillaVisual
 
     ) {
         if (camaraSala == null) return;
@@ -83,23 +104,18 @@ public final class CanalRenderizadoPartida {
         Gdx.gl.glClearColor(0.05f, 0.05f, 0.07f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-        // =====================
         // Mapa Tiled
-        // =====================
         if (mapaRenderer != null) {
             mapaRenderer.setView(camaraSala.getCamara());
             mapaRenderer.render();
         }
 
-        // =====================
         // Sprites (puertas, botones, enemigos, jugadores)
-        // =====================
         if (batch != null) {
             batch.setProjectionMatrix(camaraSala.getCamara().combined);
             batch.begin();
             batch.enableBlending();
             batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-
 
             // Puertas (sprite) - se dibujan con la textura asignada a cada PuertaVisual
             if (puertasVisuales != null && !puertasVisuales.isEmpty()) {
@@ -166,21 +182,15 @@ public final class CanalRenderizadoPartida {
             sprites.limpiarItemsDesaparecidos();
             sprites.renderItems(batch, salaActual);
 
-
-
             batch.end();
         }
 
-        // =====================
         // Debug fisica (opcional)
-        // =====================
         if (debugFisica && fisica != null) {
             fisica.debugDraw(camaraSala.getCamara());
         }
 
-        // =====================
         // Debug puertas (solo si querés ver hitboxes) - opcional
-        // =====================
         if (debugFisica && shapeRendererMundo != null && gestorEntidades != null) {
             shapeRendererMundo.setProjectionMatrix(camaraSala.getCamara().combined);
             shapeRendererMundo.begin(ShapeRenderer.ShapeType.Line);
@@ -188,26 +198,9 @@ public final class CanalRenderizadoPartida {
             shapeRendererMundo.end();
         }
 
-        // =====================
         // HUD (siempre al final)
-        // =====================
         if (hud != null) {
             hud.render();
         }
-    }
-
-    public void dibujarDebugBodies(Camera camara, ShapeRenderer debugRenderer, Body... bodies) {
-        if (camara == null || debugRenderer == null || bodies == null) return;
-
-        debugRenderer.setProjectionMatrix(camara.combined);
-        debugRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        for (Body body : bodies) {
-            if (body == null) continue;
-            Vector2 pos = body.getPosition();
-            debugRenderer.rect(pos.x - 2f, pos.y - 2f, 4f, 4f);
-        }
-
-        debugRenderer.end();
     }
 }

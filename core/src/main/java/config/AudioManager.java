@@ -4,11 +4,15 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Music;
 
 public class AudioManager {
+    private Music menuMusic;
 
     private float masterVolume = 0.8f;
 
-    private Music menuMusic;
     private Music gameMusic;
+
+    public float getMasterVolume() {
+        return masterVolume;
+    }
 
     public void cargarMusicas() {
         // Ajustá extensión si hace falta: .mp3 / .ogg
@@ -21,18 +25,15 @@ public class AudioManager {
         aplicarVolumen();
     }
 
-    public void setMasterVolume(float v) {
-        masterVolume = clamp01(v);
-        aplicarVolumen();
+    public void dispose() {
+        if (menuMusic != null) menuMusic.dispose();
+        if (gameMusic != null) gameMusic.dispose();
     }
 
-    public float getMasterVolume() {
-        return masterVolume;
-    }
-
-    private void aplicarVolumen() {
-        if (menuMusic != null) menuMusic.setVolume(masterVolume);
-        if (gameMusic != null) gameMusic.setVolume(masterVolume);
+    public void playJuego() {
+        if (gameMusic == null) return;
+        if (menuMusic != null) menuMusic.stop();
+        if (!gameMusic.isPlaying()) gameMusic.play();
     }
 
     public void playMenu() {
@@ -41,10 +42,9 @@ public class AudioManager {
         if (!menuMusic.isPlaying()) menuMusic.play();
     }
 
-    public void playJuego() {
-        if (gameMusic == null) return;
-        if (menuMusic != null) menuMusic.stop();
-        if (!gameMusic.isPlaying()) gameMusic.play();
+    public void setMasterVolume(float v) {
+        masterVolume = clamp01(v);
+        aplicarVolumen();
     }
 
     public void stopAll() {
@@ -56,8 +56,8 @@ public class AudioManager {
         return v < 0f ? 0f : (v > 1f ? 1f : v);
     }
 
-    public void dispose() {
-        if (menuMusic != null) menuMusic.dispose();
-        if (gameMusic != null) gameMusic.dispose();
+    private void aplicarVolumen() {
+        if (menuMusic != null) menuMusic.setVolume(masterVolume);
+        if (gameMusic != null) gameMusic.setVolume(masterVolume);
     }
 }

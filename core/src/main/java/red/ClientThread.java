@@ -4,41 +4,21 @@ import java.io.IOException;
 import java.net.*;
 
 public class ClientThread extends Thread {
-
-    // ===== Constantes =====
-    private static final int DEFAULT_SERVER_PORT = 5555;
     private static final String DEFAULT_SERVER_IP = "127.0.0.1";
-    private static final int BUFFER_SIZE = 1024;
+
     private static final String SEP = ":";
+
+    private static final int BUFFER_SIZE = 1024;
+
+    private DatagramSocket socket;
 
     private final GameController controller;
 
-    private DatagramSocket socket;
-    private InetAddress serverIP;
-    private int serverPort = DEFAULT_SERVER_PORT;
-
     private volatile boolean running = true;
 
-    public ClientThread(GameController controller) {
-        super("ClientThread");
-        this.controller = controller;
+    private InetAddress serverIP;
 
-        try {
-            socket = new DatagramSocket();
-            socket.setBroadcast(true);
-            serverIP = InetAddress.getByName(DEFAULT_SERVER_IP); // o tu IP real
-        } catch (Exception e) {
-            System.out.println("[CLIENT] error creando socket: " + e.getMessage());
-        }
-    }
-
-    public void close() {
-        running = false;
-        DatagramSocket s = socket; // snapshot
-        if (s != null && !s.isClosed()) {
-            s.close(); // hará que receive() salga con SocketException (normal)
-        }
-    }
+    private int serverPort = DEFAULT_SERVER_PORT;
 
     @Override
     public void run() {
@@ -63,6 +43,30 @@ public class ClientThread extends Thread {
             // ✅ evita que el thread muera por parseos inesperados
             controller.disconnect("Unexpected error: " + e.getMessage());
         }
+
+
+}
+
+    public ClientThread(GameController controller) {
+        super("ClientThread");
+        setDaemon(true); // ✅
+        this.controller = controller;
+
+        try {
+            socket = new DatagramSocket();
+            socket.setBroadcast(true);
+            serverIP = InetAddress.getByName(DEFAULT_SERVER_IP); // o tu IP real
+        } catch (Exception e) {
+            System.out.println("[CLIENT] error creando socket: " + e.getMessage());
+        }
+    }
+
+    public void close() {
+        running = false;
+        DatagramSocket s = socket; // snapshot
+        if (s != null && !s.isClosed()) {
+            s.close(); // hará que receive() salga con SocketException (normal)
+        }
     }
 
     public void sendMessage(String message) {
@@ -77,13 +81,29 @@ public class ClientThread extends Thread {
         } catch (IOException ignored) {}
     }
 
+    private static Float parseFloat(String s) {
+        try { return Float.parseFloat(s); } catch (Exception e) { return null; }
+    }
+
+    private static Integer parseInt(String s) {
+        try { return Integer.parseInt(s); } catch (Exception e) { return null; }
+    }
+
+    private static int parseIntOr(String s, int def) {
+        try { return Integer.parseInt(s); } catch (Exception e) { return def; }
+    }
+
+    private static long parseLongOr(String s, long def) {
+        try { return Long.parseLong(s); } catch (Exception e) { return def; }
+    }
+
     private void parseMessage(String msg, DatagramPacket packet) {
         String[] parts = split(msg);
         if (parts.length == 0) return;
 
         switch (parts[0]) {
 
-            case "Connected": {
+        case "Connected": {
                 if (parts.length >= 2) {
                     // ✅ conservar lógica: aprende IP real del server
                     serverIP = packet.getAddress();
@@ -94,7 +114,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "Appearance": {
+        case "Appearance": {
                 // Appearance:playerId:GENERO:ESTILO
                 if (parts.length >= 4) {
                     Integer id = parseInt(parts[1]);
@@ -105,8 +125,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-
-            case "Start": {
+        case "Start": {
                 long seed = (parts.length >= 2) ? parseLongOr(parts[1], 0L) : 0L;
                 int nivel = (parts.length >= 3) ? parseIntOr(parts[2], 1) : 1;
 
@@ -115,7 +134,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "UpdatePosition": {
+        case "UpdatePosition": {
                 if (parts.length >= 4) {
                     Integer id = parseInt(parts[1]);
                     Float x = parseFloat(parts[2]);
@@ -127,7 +146,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "UpdateRoom": {
+        case "UpdateRoom": {
                 // ✅ LOG para confirmar recepción
                 System.out.println("[CLIENT] <- " + msg);
 
@@ -140,7 +159,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "SpawnItem": {
+        case "SpawnItem": {
                 // SpawnItem:id:tipo:x:y
                 if (parts.length >= 5) {
                     Integer itemId = parseInt(parts[1]);
@@ -154,7 +173,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "DespawnItem": {
+        case "DespawnItem": {
                 if (parts.length >= 2) {
                     Integer itemId = parseInt(parts[1]);
                     if (itemId != null) controller.despawnItem(itemId);
@@ -162,7 +181,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "PickupItem": {
+        case "PickupItem": {
                 // PickupItem:jugadorId:itemId:tipo
                 if (parts.length >= 4) {
                     Integer jugadorId = parseInt(parts[1]);
@@ -175,7 +194,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "Hud": {
+        case "Hud": {
                 // Hud:playerId:vida:vidaMax:tiposCsv
                 if (parts.length >= 4) {
                     Integer playerId = parseInt(parts[1]);
@@ -189,7 +208,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "Other": {
+        case "Other": {
                 // Other:otherPlayerId:vida:vidaMax
                 if (parts.length >= 4) {
                     Integer otherId = parseInt(parts[1]);
@@ -202,7 +221,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "SpawnEnemy": {
+        case "SpawnEnemy": {
                 // SpawnEnemy:id:nombre:x:y:sala
                 if (parts.length >= 6) {
                     Integer enemyId = parseInt(parts[1]);
@@ -217,7 +236,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "UpdateEnemy": {
+        case "UpdateEnemy": {
                 if (parts.length >= 4) {
                     Integer enemyId = parseInt(parts[1]);
                     Float x = parseFloat(parts[2]);
@@ -229,7 +248,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "DespawnEnemy": {
+        case "DespawnEnemy": {
                 if (parts.length >= 2) {
                     Integer enemyId = parseInt(parts[1]);
                     if (enemyId != null) controller.despawnEnemy(enemyId);
@@ -237,14 +256,14 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "RoomClear": {
+        case "RoomClear": {
                 if (parts.length >= 2) {
                     controller.roomClear(parts[1]);
                 }
                 break;
             }
 
-            case "Damage": {
+        case "Damage": {
                 // Damage:playerId:vida:vidaMax
                 if (parts.length >= 4) {
                     Integer playerId = parseInt(parts[1]);
@@ -257,7 +276,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-            case "Dead": {
+        case "Dead": {
                 if (parts.length >= 2) {
                     Integer playerId = parseInt(parts[1]);
                     if (playerId != null) controller.dead(playerId);
@@ -265,7 +284,7 @@ public class ClientThread extends Thread {
                 break;
             }
 
-                        case "GameOver": {
+        case "GameOver": {
                 if (parts.length >= 2) {
                     Integer loserId = parseInt(parts[1]);
                     if (loserId != null) controller.gameOver(loserId);
@@ -273,36 +292,23 @@ public class ClientThread extends Thread {
                 break;
             }
 
-case "Disconnect": {
+        case "Disconnect": {
                 controller.disconnect("Server closed");
                 break;
             }
 
-            default:
-                // ignorar desconocidos (sin romper)
-                break;
+        default:
+            // ignorar desconocidos (sin romper)
+            break;
         }
     }
+
+    // ===== Constantes =====
+    private static final int DEFAULT_SERVER_PORT = 5555;
 
     // ===== Helpers =====
 
     private static String[] split(String msg) {
         return msg.split(SEP);
-    }
-
-    private static Integer parseInt(String s) {
-        try { return Integer.parseInt(s); } catch (Exception e) { return null; }
-    }
-
-    private static int parseIntOr(String s, int def) {
-        try { return Integer.parseInt(s); } catch (Exception e) { return def; }
-    }
-
-    private static Float parseFloat(String s) {
-        try { return Float.parseFloat(s); } catch (Exception e) { return null; }
-    }
-
-    private static long parseLongOr(String s, long def) {
-        try { return Long.parseLong(s); } catch (Exception e) { return def; }
     }
 }

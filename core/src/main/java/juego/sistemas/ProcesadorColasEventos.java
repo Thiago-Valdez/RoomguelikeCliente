@@ -19,32 +19,45 @@ import mapa.model.Habitacion;
 import mapa.puertas.DatosPuerta;
 
 /**
- * Procesa colas de eventos (pickup, botones, daño) para evitar modificar Box2D dentro de callbacks
- * y mantener la lógica del frame centralizada.
- */
+* Procesa colas de eventos (pickup, botones, daño) para evitar modificar Box2D dentro de callbacks
+* y mantener la lógica del frame centralizada.
+*/
 public final class ProcesadorColasEventos {
+    private Vector2 calcularSpawnPuerta(DatosPuerta datos) {
 
-    public void procesarItemsPendientes(
-            ColaEventos eventos,
-            Set<entidades.items.Item> itemsYaProcesados,
-            GestorDeEntidades gestorEntidades
-    ) {
-        if (eventos == null || eventos.isEmpty()) return;
+        Habitacion destino = datos.destino();
+        Direccion dir = datos.direccion();
 
-        itemsYaProcesados.clear();
+        float margen = 32f; // separación de la puerta
+        float baseX = destino.gridX * destino.ancho;
+        float baseY = destino.gridY * destino.alto;
 
-        eventos.drenar(EventoPickup.class, ev -> {
-            if (!itemsYaProcesados.add(ev.item())) return;
-            gestorEntidades.recogerItem(ev.jugadorId(), ev.item());
-        });
+        return switch (dir) {
+        case NORTE -> new Vector2(
+            baseX + destino.ancho / 2f,
+            baseY + margen
+            );
+        case SUR -> new Vector2(
+            baseX + destino.ancho / 2f,
+            baseY + destino.alto - margen
+            );
+        case ESTE -> new Vector2(
+            baseX + margen,
+            baseY + destino.alto / 2f
+            );
+        case OESTE -> new Vector2(
+            baseX + destino.ancho - margen,
+            baseY + destino.alto / 2f
+            );
+        };
     }
 
     public void procesarBotonesPendientes(
-        ColaEventos eventos,
-        Habitacion salaActual,
-        ControlPuzzlePorSala controlPuzzle,
-        Consumer<Habitacion> matarEnemigosDeSalaConAnim,
-        List<mapa.botones.BotonVisual> botonesVisuales
+    ColaEventos eventos,
+    Habitacion salaActual,
+    ControlPuzzlePorSala controlPuzzle,
+    Consumer<Habitacion> matarEnemigosDeSalaConAnim,
+    List<mapa.botones.BotonVisual> botonesVisuales
     ) {
         if (eventos == null || eventos.isEmpty()) return;
 
@@ -91,12 +104,11 @@ public final class ProcesadorColasEventos {
         });
     }
 
-
     public void procesarDaniosPendientes(
-            ColaEventos eventos,
-            Set<Integer> jugadoresDanioFrame,
-            GestorDeEntidades gestorEntidades,
-            SistemaSpritesEntidades sprites
+    ColaEventos eventos,
+    Set<Integer> jugadoresDanioFrame,
+    GestorDeEntidades gestorEntidades,
+    SistemaSpritesEntidades sprites
     ) {
         if (eventos == null || eventos.isEmpty()) return;
 
@@ -115,9 +127,7 @@ public final class ProcesadorColasEventos {
             Body body = j.getCuerpoFisico();
             if (body == null) return;
 
-            // =========================
             // 1) Separación anti-loop (antes de congelar)
-            // =========================
             float px = body.getPosition().x;
             float py = body.getPosition().y;
 
@@ -140,15 +150,11 @@ public final class ProcesadorColasEventos {
             body.setLinearVelocity(0f, 0f);
             body.setAngularVelocity(0f);
 
-            // =========================
             // 2) Aplicar daño + cooldown anti re-hit
-            // =========================
             j.recibirDanio();
             j.marcarHitCooldown(1.0f);
 
-            // =========================
             // 3) Animación + feedback
-            // =========================
             SpritesEntidad sp = (sprites != null) ? sprites.get(j) : null;
             if (sp != null) {
                 sp.iniciarMuerte();
@@ -156,13 +162,28 @@ public final class ProcesadorColasEventos {
         });
     }
 
+    public void procesarItemsPendientes(
+    ColaEventos eventos,
+    Set<entidades.items.Item> itemsYaProcesados,
+    GestorDeEntidades gestorEntidades
+    ) {
+        if (eventos == null || eventos.isEmpty()) return;
+
+        itemsYaProcesados.clear();
+
+        eventos.drenar(EventoPickup.class, ev -> {
+            if (!itemsYaProcesados.add(ev.item())) return;
+            gestorEntidades.recogerItem(ev.jugadorId(), ev.item());
+        });
+    }
+
     public void procesarPuertasPendientes(
-        ColaEventos eventos,
-        GestorDeEntidades gestorEntidades,
-        Habitacion salaActual,
-        java.util.function.Consumer<Habitacion> onCambioSala,
-        boolean esOnline,
-        java.util.function.Consumer<EventoPuerta> onPuertaOnline
+    ColaEventos eventos,
+    GestorDeEntidades gestorEntidades,
+    Habitacion salaActual,
+    java.util.function.Consumer<Habitacion> onCambioSala,
+    boolean esOnline,
+    java.util.function.Consumer<EventoPuerta> onPuertaOnline
     ) {
         if (eventos == null || eventos.isEmpty()) return;
 
@@ -193,36 +214,4 @@ public final class ProcesadorColasEventos {
             if (onCambioSala != null) onCambioSala.accept(datos.destino());
         });
     }
-
-
-    private Vector2 calcularSpawnPuerta(DatosPuerta datos) {
-
-        Habitacion destino = datos.destino();
-        Direccion dir = datos.direccion();
-
-        float margen = 32f; // separación de la puerta
-        float baseX = destino.gridX * destino.ancho;
-        float baseY = destino.gridY * destino.alto;
-
-        return switch (dir) {
-            case NORTE -> new Vector2(
-                baseX + destino.ancho / 2f,
-                baseY + margen
-            );
-            case SUR -> new Vector2(
-                baseX + destino.ancho / 2f,
-                baseY + destino.alto - margen
-            );
-            case ESTE -> new Vector2(
-                baseX + margen,
-                baseY + destino.alto / 2f
-            );
-            case OESTE -> new Vector2(
-                baseX + destino.ancho - margen,
-                baseY + destino.alto / 2f
-            );
-        };
-    }
-
-
 }

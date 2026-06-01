@@ -6,15 +6,15 @@ import mapa.model.Habitacion;
 import java.util.*;
 
 public class DisposicionMapa {
+    /** Sala de inicio: la primera del camino, si existe; si no, INICIO_1 */
+    public Habitacion salaInicio() {
+        if (!camino.isEmpty()) return camino.get(0);
+        return Habitacion.INICIO_1;
+    }
 
-    /** El camino de habitaciones que el generador decidió para este nivel (EN ORDEN) */
-    private final List<Habitacion> camino = new ArrayList<>();
-
-    /** Habitaciones visitadas (útil para el minimapa, HUD) */
-    private final Set<Habitacion> descubiertas = new HashSet<>();
-
-    /** Conexiones REALES del piso (solo puertas válidas) */
-    private final Map<Habitacion, EnumMap<Direccion, Habitacion>> conexionesPiso = new HashMap<>();
+    public boolean esSalaActiva(Habitacion h) {
+        return camino.contains(h);
+    }
 
     /** Agrega una sala al camino (la run actual) */
     public void agregarAlCamino(Habitacion h) {
@@ -22,23 +22,31 @@ public class DisposicionMapa {
         if (!camino.contains(h)) camino.add(h);
     }
 
-    /** Devuelve el camino completo (salas activas de esta run) */
-    public List<Habitacion> getCamino() {
-        return camino;
-    }
-
     /** Alias semántico: salas activas = camino */
     public List<Habitacion> getSalasActivas() {
         return camino;
     }
 
-    public boolean esSalaActiva(Habitacion h) {
-        return camino.contains(h);
+    /** Conexiones REALES del piso (solo puertas válidas) */
+    private final Map<Habitacion, EnumMap<Direccion, Habitacion>> conexionesPiso = new HashMap<>();
+
+    /** Conexiones válidas de la sala en este piso */
+    public EnumMap<Direccion, Habitacion> getConexionesEnPiso(Habitacion origen) {
+        EnumMap<Direccion, Habitacion> m = conexionesPiso.get(origen);
+        if (m == null) return new EnumMap<>(Direccion.class);
+        return m;
     }
 
-    /** Marca una sala como descubierta */
-    public void descubrir(Habitacion h) {
-        if (h != null) descubiertas.add(h);
+    /** Destino por una dirección, SOLO si la puerta es válida en este piso */
+    public Habitacion getDestinoEnPiso(Habitacion origen, Direccion dir) {
+        EnumMap<Direccion, Habitacion> m = conexionesPiso.get(origen);
+        if (m == null) return null;
+        return m.get(dir);
+    }
+
+    /** Devuelve el camino completo (salas activas de esta run) */
+    public List<Habitacion> getCamino() {
+        return camino;
     }
 
     /** Devuelve true si la sala ya se visitó */
@@ -51,36 +59,15 @@ public class DisposicionMapa {
         return descubiertas;
     }
 
-    /** Sala de inicio: la primera del camino, si existe; si no, INICIO_1 */
-    public Habitacion salaInicio() {
-        if (!camino.isEmpty()) return camino.get(0);
-        return Habitacion.INICIO_1;
-    }
+    /** El camino de habitaciones que el generador decidió para este nivel (EN ORDEN) */
+    private final List<Habitacion> camino = new ArrayList<>();
 
-    // =========================
-    // Conexiones del piso
-    // =========================
+    /** Habitaciones visitadas (útil para el minimapa, HUD) */
+    private final Set<Habitacion> descubiertas = new HashSet<>();
 
-    /** Vincula una puerta válida del piso */
-    public void vincularEnPiso(Habitacion origen, Direccion dir, Habitacion destino) {
-        if (origen == null || dir == null || destino == null) return;
-        conexionesPiso
-            .computeIfAbsent(origen, k -> new EnumMap<>(Direccion.class))
-            .put(dir, destino);
-    }
-
-    /** Destino por una dirección, SOLO si la puerta es válida en este piso */
-    public Habitacion getDestinoEnPiso(Habitacion origen, Direccion dir) {
-        EnumMap<Direccion, Habitacion> m = conexionesPiso.get(origen);
-        if (m == null) return null;
-        return m.get(dir);
-    }
-
-    /** Conexiones válidas de la sala en este piso */
-    public EnumMap<Direccion, Habitacion> getConexionesEnPiso(Habitacion origen) {
-        EnumMap<Direccion, Habitacion> m = conexionesPiso.get(origen);
-        if (m == null) return new EnumMap<>(Direccion.class);
-        return m;
+    /** Marca una sala como descubierta */
+    public void descubrir(Habitacion h) {
+        if (h != null) descubiertas.add(h);
     }
 
     /** Útil para debug */
@@ -97,5 +84,15 @@ public class DisposicionMapa {
             }
             System.out.println(sb);
         }
+    }
+
+    // Conexiones del piso
+
+    /** Vincula una puerta válida del piso */
+    public void vincularEnPiso(Habitacion origen, Direccion dir, Habitacion destino) {
+        if (origen == null || dir == null || destino == null) return;
+        conexionesPiso
+        .computeIfAbsent(origen, k -> new EnumMap<>(Direccion.class))
+        .put(dir, destino);
     }
 }

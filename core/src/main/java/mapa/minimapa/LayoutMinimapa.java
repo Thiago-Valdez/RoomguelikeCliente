@@ -1,34 +1,40 @@
 package mapa.minimapa;
 
+import mapa.generacion.DisposicionMapa;
 import mapa.model.Direccion;
 import mapa.model.Habitacion;
-import mapa.generacion.DisposicionMapa;
 
 import java.util.*;
 
 /**
- * Construye un layout del minimapa a partir de las CONEXIONES DEL PISO (conexionesPiso).
- *
- * - Parte de INICIO en (0,0)
- * - Para cada conexión (origen, dir -> destino), intenta colocar destino en origen + dir
- * - Si la celda está ocupada, se corre más en esa dirección (mantiene dirección)
- *
- * Esto hace que el minimapa represente EXACTAMENTE lo establecido por el generador (piso),
- * sin perder tu GrafoPuertas random (que sigue existiendo, solo no se usa para el HUD).
- */
+* Construye un layout del minimapa a partir de las CONEXIONES DEL PISO (conexionesPiso).
+*
+* - Parte de INICIO en (0,0)
+* - Para cada conexión (origen, dir -> destino), intenta colocar destino en origen + dir
+* - Si la celda está ocupada, se corre más en esa dirección (mantiene dirección)
+*
+* Esto hace que el minimapa represente EXACTAMENTE lo establecido por el generador (piso),
+* sin perder tu GrafoPuertas random (que sigue existiendo, solo no se usa para el HUD).
+*/
 public final class LayoutMinimapa {
+    public Map<Habitacion, PosMini> posiciones() { return posPorSala; }
 
-    /** Posición asignada para cada sala activa. */
-    private final Map<Habitacion, PosMini> posPorSala = new HashMap<>();
+    /** Celdas del pasillo entre a y b (sin incluir endpoints). */
+    public List<PosMini> pasilloEntre(Habitacion a, Habitacion b) {
+        return pasillos.getOrDefault(new EdgeKey(a, b), List.of());
+    }
 
-    /** Ocupación inversa: qué sala ocupa una posición. */
-    private final Map<PosMini, Habitacion> salaPorPos = new HashMap<>();
+    public int minX() { return minX; }
+    public int maxX() { return maxX; }
+    public int minY() { return minY; }
+    public int maxY() { return maxY; }
 
-    /** Pasillos: celdas intermedias entre dos salas. */
-    private final Map<EdgeKey, List<PosMini>> pasillos = new HashMap<>();
+    // ----------------- internos -----------------
 
-    /** Bounds del layout (para centrar/normalizar en HUD). */
-    private int minX, maxX, minY, maxY;
+    private void colocar(Habitacion h, PosMini p) {
+        posPorSala.put(h, p);
+        salaPorPos.put(p, h);
+    }
 
     private LayoutMinimapa() {}
 
@@ -81,33 +87,6 @@ public final class LayoutMinimapa {
         return out;
     }
 
-    public Map<Habitacion, PosMini> posiciones() { return posPorSala; }
-
-    /** Celdas del pasillo entre a y b (sin incluir endpoints). */
-    public List<PosMini> pasilloEntre(Habitacion a, Habitacion b) {
-        return pasillos.getOrDefault(new EdgeKey(a, b), List.of());
-    }
-
-    public int minX() { return minX; }
-    public int maxX() { return maxX; }
-    public int minY() { return minY; }
-    public int maxY() { return maxY; }
-
-    // ----------------- internos -----------------
-
-    private void colocar(Habitacion h, PosMini p) {
-        posPorSala.put(h, p);
-        salaPorPos.put(p, h);
-    }
-
-    private PosMini buscarLibreEnDireccion(PosMini start, Direccion dir) {
-        PosMini p = start;
-        while (salaPorPos.containsKey(p)) {
-            p = new PosMini(p.x() + dx(dir), p.y() + dy(dir));
-        }
-        return p;
-    }
-
     private List<PosMini> celdasIntermedias(PosMini a, PosMini b) {
         // Nos movemos en “L”: primero X, luego Y.
         // En la práctica casi siempre será recto, pero esto evita huecos raros.
@@ -133,6 +112,30 @@ public final class LayoutMinimapa {
         return out;
     }
 
+    private PosMini buscarLibreEnDireccion(PosMini start, Direccion dir) {
+        PosMini p = start;
+        while (salaPorPos.containsKey(p)) {
+            p = new PosMini(p.x() + dx(dir), p.y() + dy(dir));
+        }
+        return p;
+    }
+
+    private static int dx(Direccion d) {
+        return switch (d) {
+        case ESTE -> 1;
+        case OESTE -> -1;
+        default -> 0;
+        };
+    }
+
+    private static int dy(Direccion d) {
+        return switch (d) {
+        case NORTE -> 1;
+        case SUR -> -1;
+        default -> 0;
+        };
+    }
+
     private void calcularBounds() {
         minX = Integer.MAX_VALUE; maxX = Integer.MIN_VALUE;
         minY = Integer.MAX_VALUE; maxY = Integer.MIN_VALUE;
@@ -149,21 +152,8 @@ public final class LayoutMinimapa {
         }
     }
 
-    private static int dx(Direccion d) {
-        return switch (d) {
-            case ESTE -> 1;
-            case OESTE -> -1;
-            default -> 0;
-        };
-    }
-
-    private static int dy(Direccion d) {
-        return switch (d) {
-            case NORTE -> 1;
-            case SUR -> -1;
-            default -> 0;
-        };
-    }
+    /** Bounds del layout (para centrar/normalizar en HUD). */
+    private int minX, maxX, minY, maxY;
 
     /** Clave no dirigida (A-B == B-A) para no duplicar pasillos. */
     private static final class EdgeKey {
@@ -187,4 +177,13 @@ public final class LayoutMinimapa {
             return 31 * a + b;
         }
     }
+
+    /** Ocupación inversa: qué sala ocupa una posición. */
+    private final Map<PosMini, Habitacion> salaPorPos = new HashMap<>();
+
+    /** Pasillos: celdas intermedias entre dos salas. */
+    private final Map<EdgeKey, List<PosMini>> pasillos = new HashMap<>();
+
+    /** Posición asignada para cada sala activa. */
+    private final Map<Habitacion, PosMini> posPorSala = new HashMap<>();
 }
